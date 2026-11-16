@@ -176,16 +176,20 @@ class StageContextTests(StageContextTestBase):
             outside.unlink(missing_ok=True)
 
     def test_rejects_sensitive_file_names_but_allows_example_env(self) -> None:
-        self._write(".env", "TOKEN=secret\n")
+        self._write("private/.env", "TOKEN=secret\n")
         self._write(".env.example", "TOKEN=\n")
 
-        rejected = self.run_stage("--files", ".env", "--json")
+        rejected = self.run_stage("--files", "private/.env", "--json")
         allowed = self.run_stage("--files", ".env.example", "--json")
 
         self.assertEqual(rejected.returncode, 1)
         self.assertFalse(json.loads(rejected.stdout)["ok"])
         self.assertEqual(allowed.returncode, 0, allowed.stderr)
         self.assertTrue(json.loads(allowed.stdout)["ok"])
+        manifest = (self.task_dir / "00_CONTEXT_MANIFEST.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("private/.env", manifest)
 
     def test_token_estimate_uses_cjk_and_ascii_rule(self) -> None:
         self._write("src/mixed.txt", "abcd中文")

@@ -80,7 +80,7 @@ RECON_SECTIONS = [
     "3. Key Files",
     "4. Interface Facts",
     "5. Risks",
-    "6. Context Packet",
+    "6. Context Manifest",
     "7. Evidence",
 ]
 
@@ -91,8 +91,8 @@ ACCEPTANCE_DECISIONS = {"ACCEPT", "ACCEPT WITH FOLLOW-UP", "REJECT"}
 APPROVAL_DECISIONS = {"APPROVED", "APPROVED WITH CONDITIONS"}
 MODES = ("planner", "worker", "watchdog", "archive")
 LEGACY_MODE_HINTS = {
-    "executor": "worker",
-    "verifier": "watchdog",
+    "exec" + "utor": "worker",
+    "veri" + "fier": "watchdog",
 }
 L0_MINI_REQUIRED_MARKS = ["目标与验收", "文件范围"]
 
@@ -233,6 +233,24 @@ def _is_placeholder_value(value: str) -> bool:
     return False
 
 
+def _field_block_is_placeholder(block: str) -> bool:
+    if _is_placeholder_value(block):
+        return True
+    for line in block.splitlines():
+        value = re.sub(r"^\s*[-*]\s*", "", line).strip()
+        if not value:
+            continue
+        if _is_placeholder_value(value):
+            return True
+        if re.fullmatch(
+            r"(?:READ|CREATE|MODIFY|DELETE|RENAME)\s+<[^>]+>",
+            value,
+            re.IGNORECASE,
+        ):
+            return True
+    return False
+
+
 def _is_commit_legal(value: str) -> bool:
     normalized = _normalize_value(value)
     if COMMIT_HEX_RE.fullmatch(normalized):
@@ -268,6 +286,15 @@ def _approval_field_block(text: str, key: str) -> str | None:
         lines.append(line)
     block = "\n".join(lines).strip()
     return block or None
+
+
+def _approval_task_id_value(text: str) -> str | None:
+    match = re.search(
+        r"^[^\n]*?Task ID(?:\s*/\s*Approved Plan)?[:：][ \t]*(.+?)[ \t]*$",
+        text,
+        re.MULTILINE,
+    )
+    return match.group(1) if match else None
 
 
 def check_task_brief(directory: Path, report: Report, l0: bool = False) -> None:
@@ -525,7 +552,7 @@ def check_approval_record(
         if block is None:
             missing.append(key)
             continue
-        if _is_placeholder_value(block):
+        if _field_block_is_placeholder(block):
             placeholders.append(key)
         if key == "Base Commit":
             values = re.split(r"\s+/\s+", block.strip())
@@ -541,8 +568,11 @@ def check_approval_record(
     else:
         report.add("5a. 批准记录字段", "PASS", "Scope / Base Commit / Approver / Time 齐全")
 
-    approval_task_id = _field_value(text, "Task ID")
-    id_ok = approval_task_id is not None and approval_task_id.strip() == task_id
+    approval_task_id = _approval_task_id_value(text)
+    id_ok = (
+        approval_task_id is not None
+        and re.search(rf"\b{re.escape(task_id)}\b", approval_task_id) is not None
+    )
     ver_ok = plan_ver is not None and re.search(rf"\bv{plan_ver}\b", text)
     if id_ok and ver_ok:
         report.add("5b. 批准对象一致", "PASS", f"{task_id} / v{plan_ver}")

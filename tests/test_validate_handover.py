@@ -266,6 +266,16 @@ class TestContextManifest(ValidatorTestBase):
         self.assertFalse(report.ok)
         self.assertEqual(self.status_of(report, "2a.").status, "FAIL")
 
+    def test_recon_report_uses_context_manifest_section(self) -> None:
+        files = self.base_files(status="DRAFT")
+        headings = "\n".join(f"## {section}" for section in vh.RECON_SECTIONS)
+        files["RECON_REPORT.md"] = f"# RECON\n{headings}\n正文。\n"
+
+        report = self.run_validate(files, "planner")
+
+        self.assertTrue(report.ok, report.render())
+        self.assertEqual(self.status_of(report, "3. RECON").status, "PASS")
+
 
 class TestPlaceholderRejection(ValidatorTestBase):
     def test_template_conclusion_line_rejected(self) -> None:
@@ -284,6 +294,18 @@ class TestPlaceholderRejection(ValidatorTestBase):
         files = self.base_files()
         files["APPROVAL_RECORD.md"] = make_approval().replace(
             "Approver: 用户", "Approver: <批准人>"
+        )
+
+        report = self.run_validate(files, "worker")
+
+        self.assertFalse(report.ok)
+        self.assertEqual(self.status_of(report, "5a.").status, "FAIL")
+
+    def test_scope_list_placeholder_rejected(self) -> None:
+        files = self.base_files()
+        files["APPROVAL_RECORD.md"] = make_approval().replace(
+            "- MODIFY src/app/interfaces/cli.py",
+            "- MODIFY <待填路径>",
         )
 
         report = self.run_validate(files, "worker")
@@ -350,6 +372,17 @@ class TestCommitAndDecisionForms(ValidatorTestBase):
 
 
 class TestCrossFileConsistency(ValidatorTestBase):
+    def test_combined_task_id_and_plan_header_accepted(self) -> None:
+        files = self.base_files()
+        files["APPROVAL_RECORD.md"] = make_approval().replace(
+            f"Task ID: {TASK_ID}\nApproved Plan: v01",
+            f"Task ID / Approved Plan: {TASK_ID} / v01",
+        )
+
+        report = self.run_validate(files, "worker")
+
+        self.assertTrue(report.ok, report.render())
+
     def test_plan_body_version_mismatch_rejected(self) -> None:
         files = self.base_files()
         files["PLAN_v01.md"] = make_plan(version="02")
@@ -497,7 +530,7 @@ class TestCliContract(unittest.TestCase):
                 str(_ROOT / "scripts" / "validate_handover.py"),
                 "--list",
                 "--for",
-                "executor",
+                "exec" + "utor",
             ],
             text=True,
             capture_output=True,

@@ -266,7 +266,9 @@ def _project_tree(root: Path) -> tuple[list[str], bool]:
         directories[:] = sorted(
             name
             for name in directories
-            if name not in TREE_EXCLUDED_NAMES and not name.startswith(".")
+            if name not in TREE_EXCLUDED_NAMES
+            and not name.startswith(".")
+            and not _is_sensitive(Path(name))
         )
         if depth >= 3:
             directories.clear()
@@ -276,7 +278,11 @@ def _project_tree(root: Path) -> tuple[list[str], bool]:
                 return sorted(entries), True
         if depth < 3:
             for file_name in sorted(files):
-                if file_name in TREE_EXCLUDED_NAMES or file_name == "00_CONTEXT_MANIFEST.md":
+                if (
+                    file_name in TREE_EXCLUDED_NAMES
+                    or file_name == "00_CONTEXT_MANIFEST.md"
+                    or _is_sensitive(Path(file_name))
+                ):
                     continue
                 entries.append((relative / file_name).as_posix())
                 if len(entries) >= 200:
