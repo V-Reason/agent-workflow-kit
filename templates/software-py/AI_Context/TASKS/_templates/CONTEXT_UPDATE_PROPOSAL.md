@@ -1,6 +1,6 @@
 # CONTEXT UPDATE PROPOSAL — 上下文回写提案模板（附录 H）
 
-> 使用：验收通过后 24 小时内提交；用户审阅合入；Executor 不得把推断写成事实。
+> 使用：验收通过后 24 小时内由 Secretary 依据已接受 diff 起草；CEO 审阅合入；推断不得写成事实。
 
 Task ID: GD-YYYY-NNNN / Source Plan Version: vNN / Source Execution Report: EXECUTION_REPORT_A0x.md
 Status: PROPOSED

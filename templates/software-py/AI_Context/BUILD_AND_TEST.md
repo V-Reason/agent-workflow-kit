@@ -1,42 +1,56 @@
-# BUILD_AND_TEST — 构建、测试与验证方法（L1 固定前缀引用项）
+# BUILD_AND_TEST — 构建、测试与验证方法（L1）
 
-> 任务书第 10 章（Test Plan）只允许引用本文件登记过的真实命令；禁止臆造命令。
+> Worker 与 Watchdog 只能引用本文件登记的命令；未实际运行一律写 `NOT RUN`。
 
-## 环境准备
+## 环境
+
+- Python ≥ 3.12
+- uv
+- 依赖由 `pyproject.toml` 与 `uv.lock` 锁定
 
 ```bash
-# 安装 uv（一次性）
-pip install uv          # 或 curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync                 # 创建 .venv 并安装项目与 dev 组依赖（editable 安装）
+uv sync
 ```
 
-## 日常命令
+## 门禁
 
-| 目的 | 命令 | 期望结果 |
+| 目的 | 命令 | 期望 |
 | --- | --- | --- |
-| 安装/同步依赖 | `uv sync` | 退出码 0，生成 .venv |
-| 运行 CLI | `uv run app list` | 输出任务列表（可为空） |
-| 全部测试 | `uv run pytest` | 全绿；骨架预置 9 个用例 |
-| 仅单元测试 | `uv run pytest tests/unit` | 全绿 |
-| 仅集成测试 | `uv run pytest tests/integration` | 全绿 |
-| Lint | `uv run ruff check .` | 0 违规 |
-| 格式检查 | `uv run ruff format --check .` | 0 重排 |
-| 类型检查 | `uv run mypy` | 0 错误 |
-| 交接包校验 | `python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for executor` | exit 0 |
+| 依赖同步 | `uv sync` | exit 0 |
+| 格式 | `uv run ruff format --check .` | exit 0 |
+| Lint | `uv run ruff check .` | exit 0 |
+| 类型 | `uv run mypy` | exit 0 |
+| 自动测试 | `uv run pytest` | 全绿 |
+| 导入冒烟 | `uv run python -c "import app"` | exit 0 |
+| CLI 冒烟 | `uv run app list` | exit 0 |
 
-## V0–V5 验证层次映射（对照 v2.0 表 23）
+`AI_Context/` 被 Ruff、mypy 与 pytest 排除，防止 `FEED_DROP` 副本影响门禁。
 
-| 层次 | 本项目对应 | 命令 |
-| --- | --- | --- |
-| V1 静态检查 | ruff + mypy | 见上表 |
-| V2 编译构建 | Python 无编译；等价物为安装与导入检查 | `uv sync && uv run python -c "import app"` |
-| V3 自动测试 | pytest 单元 + 集成 | 见上表 |
-| V4 运行时验证 | CLI 真实运行 | `uv run app add GD-2026-0001 示例 && uv run app list` |
-| V5 性能验证 | 暂不适用（出现性能敏感模块后补充基准命令） | — |
+## 上下文与交接
 
-## 证据归档
+```bash
+python scripts/stage_context.py AI_Context/TASKS/GD-YYYY-NNNN --files src/app/example.py
+python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for planner
+python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for worker
+python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for watchdog
+python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for archive
+```
 
-验证证据（命令输出、日志、截图）存入 `AI_Context/EVIDENCE/GD-YYYY-NNNN/`；执行报告第 4 节引用相对路径。
+## V0–V5
+
+| 层 | 内容 |
+| --- | --- |
+| V0 | 计划、接口、数据流、Non-goals 审阅 |
+| V1 | ruff + mypy |
+| V2 | 依赖同步、导入冒烟 |
+| V3 | pytest 单元与集成 |
+| V4 | CLI/运行时行为 |
+| V5 | 有性能敏感模块后登记 benchmark |
+
+## 证据
+
+命令、版本、退出码、日志与截图存入 `AI_Context/EVIDENCE/GD-YYYY-NNNN/`，执行报告与 ACCEPTANCE 使用相对路径引用。
 
 ---
-最后核验日期：2026-11-15｜分支：main｜维护人：<项目 Owner>
+
+最后核验日期：2026-11-16｜分支：main｜维护人：<项目 Owner>

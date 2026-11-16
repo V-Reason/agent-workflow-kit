@@ -31,4 +31,4 @@ uv run pytest
 - 分支命名：`ai/GD-YYYY-NNNN-短描述`（L1/L2 任务）；默认不 commit，由用户审查 Diff 后自行提交。
 
 ---
-最后核验日期：2026-11-15｜分支：main｜维护人：<项目 Owner>
+最后核验日期：2026-11-16｜分支：main｜维护人：<项目 Owner>

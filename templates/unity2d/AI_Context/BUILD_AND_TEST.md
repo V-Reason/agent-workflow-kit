@@ -1,40 +1,49 @@
-# BUILD_AND_TEST — 编译、测试与验证方法（L1 固定前缀引用项）
+# BUILD_AND_TEST — Unity 2D 验证方法（L1）
 
-> 任务书第 10 章（Test Plan）只允许引用本文件登记过的方法；禁止臆造命令。
+> 任务书第 10 章只能引用这里登记的验证入口。实际未运行必须记 `NOT RUN`，环境缺失必须记 `BLOCKED` 或 `NOT RUN`。
 
-## 环境准备
+## 环境
 
-1. Unity Hub 安装 **Unity 2022.3 LTS**（或 Unity 6000.x，与 PROJECT_OVERVIEW.md 一致）。
-2. 打开工程后等待 Assembly 编译完成；首次打开 Unity 会补全 manifest 内置模块并生成 .meta。
-3. Input System 首次启用时弹窗要求重启并切换 Active Input Handling —— 该项属 ProjectSettings 变更，由用户手工确认。
+- Unity 2022.3 LTS 或 Unity 6000.x，版本必须与 `PROJECT_OVERVIEW.md` 一致。
+- 首次打开 Unity 会生成 `.meta` 和缓存；资产与 meta 必须成对保留。
+- `ProjectSettings/`、`Packages/manifest.json`、渲染管线与 asmdef references 变更需重新审批。
 
-## 日常验证方法（V0–V5 映射，对照 v2.0 表 23）
+## 日常门禁
 
-| 层次 | 本项目对应 | 操作 | 期望 |
-| --- | --- | --- | --- |
-| V1 静态检查 | IDE 无红线 + 审计窗口 | GAMEDEV > 审计 > 项目结构审计 | FAIL = 0 |
-| V2 编译构建 | Assembly 编译 | 打开工程 / Script Compilation | Console 0 error |
-| V3 自动测试 | EditMode 测试 | Window > General > Test Runner > EditMode > Run All | 全绿（基线 6 用例） |
-| V4 运行时视觉 | 编辑器实跑 | <按任务登记的场景与观察点> | <按任务> |
-| V5 性能 | Profiler | Window > Analysis > Profiler | <按任务预算> |
+| 层 | 操作 | 期望 |
+| --- | --- | --- |
+| V0 | 审阅 PLAN、接口、生命周期与 Non-goals | 无未决阻塞 |
+| V1 | Unity 编译后的 Console + 结构审计 | 0 error，审计 FAIL = 0 |
+| V2 | Assembly 编译 | 0 error |
+| V3 | Window > General > Test Runner > EditMode > Run All | 全绿 |
+| V4 | 编辑器/运行时场景验证 | 观察点与截图/录屏证据 |
+| V5 | Profiler / Memory / DrawCall | 符合任务预算 |
 
-## 命令行批处理（可选，CI 或批量验证）
+## 无头结构审计
 
-```bash
-# Windows 示例（路径按本机调整）；macOS/Linux 用对应 Unity 可执行路径
-# 注意：不要追加 -quit；RunBatchAudit 会以 EditorApplication.Exit 显式控制退出码
-"<UnityEditor>" -batchmode -nographics -projectPath "<工程根>" -executeMethod GAMEDEV.EditorTools.ProjectAuditWindow.RunBatchAudit -logFile audit.log
+```text
+<UnityEditorPath> -batchmode -nographics -projectPath <ProjectRoot> -executeMethod GAMEDEV.EditorTools.ProjectAuditWindow.RunBatchAudit -logFile audit.log
 ```
 
-注意：
-- 批处理执行前必须关闭编辑器实例；`-executeMethod` 需要静态公开方法。
-- `RunBatchAudit()` 逐条输出审计日志（FAIL 行用 Error 级别），并以退出码报告结果：`FAIL > 0 → 1`，`FAIL = 0 → 0`。
-- 退出码非 0 即门禁失败，可直接挂 CI 或脚本拦截；`audit.log` 末行的 `[ProjectAudit]` 汇总即为审计结果。
+- 不要追加 `-quit`；`RunBatchAudit()` 通过 `EditorApplication.Exit` 返回真实退出码。
+- FAIL > 0 时退出码为 1，否则为 0。
+- 审计检查分层目录、asmdef、`AI_Context/PROJECT_BOARD.md`、`scripts/stage_context.py`、`scripts/validate_handover.py` 和脚本 `.meta`。
+- 运行前关闭同工程编辑器实例。
 
-## 证据归档
+## 上下文与交接
 
-验证证据（Console 截图、Test Runner 结果、审计输出、Profiler 采样）存入
-`AI_Context/EVIDENCE/GD-YYYY-NNNN/`；执行报告第 4 节引用相对路径。
+```bash
+python scripts/stage_context.py AI_Context/TASKS/GD-YYYY-NNNN --files Assets/Scripts/Core/GameClock.cs
+python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for planner
+python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for worker
+python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for watchdog
+python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for archive
+```
+
+## 证据
+
+Console、Test Runner、审计日志、截图与 Profiler 数据存入 `AI_Context/EVIDENCE/GD-YYYY-NNNN/`。验收表必须记录命令、版本、退出码或观察点。
 
 ---
+
 最后核验日期：2026-11-16｜分支：main｜维护人：<项目 Owner>

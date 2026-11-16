@@ -76,7 +76,9 @@ namespace GAMEDEV.EditorTools
             CheckFile(lines, Path.Combine(projectRoot, "AI_Context/README_AI.md"), "AI_Context/README_AI.md");
             CheckFile(lines, Path.Combine(projectRoot, "AI_Context/PROJECT_OVERVIEW.md"), "AI_Context/PROJECT_OVERVIEW.md");
             CheckFile(lines, Path.Combine(projectRoot, "AI_Context/MODULE_MAP.md"), "AI_Context/MODULE_MAP.md");
+            CheckFile(lines, Path.Combine(projectRoot, "AI_Context/PROJECT_BOARD.md"), "AI_Context/PROJECT_BOARD.md（Secretary 台账）");
             CheckFile(lines, Path.Combine(projectRoot, "scripts/validate_handover.py"), "scripts/validate_handover.py（交接包校验器）");
+            CheckFile(lines, Path.Combine(projectRoot, "scripts/stage_context.py"), "scripts/stage_context.py（物理投喂箱）");
 
             // ---- 3. 资产目录 ----
             CheckDirectory(lines, "Assets/Art");

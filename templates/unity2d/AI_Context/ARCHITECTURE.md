@@ -33,4 +33,4 @@ Assets/{Art, Scenes, Prefabs}    资产目录；Agent 默认不碰
 通用参数化设施为单次需求服务、为单实现者抽接口、反射注册、独立调试 UI（用 `[ContextMenu]`）。
 
 ---
-最后核验日期：2026-11-15｜分支：main｜维护人：<项目 Owner>
+最后核验日期：2026-11-16｜分支：main｜维护人：<项目 Owner>

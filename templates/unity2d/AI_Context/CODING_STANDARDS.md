@@ -5,7 +5,7 @@
 1. Unity 打开工程后 Console 0 error（warning 需逐条归因）。
 2. Test Runner > EditMode 全绿（当前基线：6 个用例）。
 3. GAMEDEV > 审计 > 项目结构审计：FAIL = 0。
-4. 交接包校验：`python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for verifier`。
+4. 交接包校验：`python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for watchdog`。
 
 ## 语言与结构约定
 
@@ -31,4 +31,4 @@
 5. 默认不 commit；用户审查 Diff 后自行提交。
 
 ---
-最后核验日期：2026-11-15｜分支：main｜维护人：<项目 Owner>
+最后核验日期：2026-11-16｜分支：main｜维护人：<项目 Owner>

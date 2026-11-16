@@ -1,7 +1,7 @@
 [project]
 name = "app"
 version = "0.1.0"
-description = "通用软件项目骨架（Agent 工作流 v2.0 配套模板）：src 四层架构 + uv + ruff + mypy + pytest"
+description = "通用软件项目骨架（Agent 工作流 v3.0 配套模板）：src 四层架构 + uv + ruff + mypy + pytest"
 requires-python = ">=3.12"
 dependencies = []
 
@@ -51,9 +51,11 @@ select = [
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+norecursedirs = [".*", "AI_Context", "build", "dist"]
 addopts = "-ra --strict-markers"
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 files = ["src", "tests"]
+exclude = ["^AI_Context/"]
