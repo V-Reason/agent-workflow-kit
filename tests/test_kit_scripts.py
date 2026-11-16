@@ -178,14 +178,22 @@ class StageContextTests(StageContextTestBase):
     def test_rejects_sensitive_file_names_but_allows_example_env(self) -> None:
         self._write("private/.env", "TOKEN=secret\n")
         self._write(".env.example", "TOKEN=\n")
+        self._write("skills/secretary-router/SKILL.md", "# Secretary\n")
 
         rejected = self.run_stage("--files", "private/.env", "--json")
         allowed = self.run_stage("--files", ".env.example", "--json")
+        secretary = self.run_stage(
+            "--files",
+            "skills/secretary-router/SKILL.md",
+            "--json",
+        )
 
         self.assertEqual(rejected.returncode, 1)
         self.assertFalse(json.loads(rejected.stdout)["ok"])
         self.assertEqual(allowed.returncode, 0, allowed.stderr)
         self.assertTrue(json.loads(allowed.stdout)["ok"])
+        self.assertEqual(secretary.returncode, 0, secretary.stderr)
+        self.assertTrue(json.loads(secretary.stdout)["ok"])
         manifest = (self.task_dir / "00_CONTEXT_MANIFEST.md").read_text(
             encoding="utf-8"
         )

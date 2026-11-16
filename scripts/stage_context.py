@@ -124,7 +124,10 @@ def _is_sensitive(relative: Path) -> bool:
         return True
     if relative.suffix.casefold() in {".key", ".pem"}:
         return True
-    return any("secret" in part or "credential" in part for part in folded_parts)
+    return any(
+        "secret" in part.replace("secretary", "") or "credential" in part
+        for part in folded_parts
+    )
 
 
 def _resolve_source(root: Path, raw: str) -> tuple[Path, str]:
