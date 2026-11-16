@@ -1,0 +1,63 @@
+# 默认：文本自动换行符归一化
+* text=auto
+
+# ---- Unity YAML 资产按文本处理（.meta 必须入库） ----
+*.meta text
+*.unity text
+*.prefab text
+*.asset text
+*.mat text
+*.anim text
+*.controller text
+*.overrideController text
+*.playable text
+*.mask text
+*.physMaterial text
+*.preset text
+*.renderTexture text
+*.spriteAtlas text
+*.asmdef text
+*.asmref text
+
+# ---- Smart Merge（UnityYAMLMerge，默认注释；启用步骤见 README） ----
+# 启用前请先执行 README 中的 git config 注册，否则合并冲突时 git 会报错。
+# *.unity merge=unityyamlmerge eol=lf
+# *.prefab merge=unityyamlmerge eol=lf
+# *.asset merge=unityyamlmerge eol=lf
+# *.mat merge=unityyamlmerge eol=lf
+# *.anim merge=unityyamlmerge eol=lf
+# *.controller merge=unityyamlmerge eol=lf
+
+# ---- 脚本与配置文本 ----
+*.cs text
+*.md text
+*.json text
+*.txt text
+*.yml text
+*.yaml text
+*.py text
+
+# ---- 二进制资产（不转换；接入 LFS 时追加 filter=lfs diff=lfs merge=lfs） ----
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.tga binary
+*.psd binary
+*.tif binary
+*.gif binary
+*.bmp binary
+*.exr binary
+*.hdr binary
+*.wav binary
+*.mp3 binary
+*.ogg binary
+*.mp4 binary
+*.fbx binary
+*.obj binary
+*.ttf binary
+*.otf binary
+*.dll binary
+*.exe binary
+*.so binary
+*.a binary
+*.unitypackage binary

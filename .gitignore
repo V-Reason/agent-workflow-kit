@@ -1,0 +1,42 @@
+# Python 工具链缓存与虚拟环境
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 环境变量、密钥与凭据（绝不入库）
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+**/*secret*
+**/*credential*
+
+# 本地临时目录与调试日志
+tmp/
+logs/
+*.log
+
+# AI 物理投喂箱只存在于本地
+AI_Context/TASKS/**/FEED_DROP/
+
+# 编辑器与系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Unity 工程实例化后请使用 templates/unity2d/.gitignore 覆盖合并
+Library/
+Temp/
+Obj/
+Build/
+Logs/
+UserSettings/

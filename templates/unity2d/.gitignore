@@ -1,0 +1,51 @@
+# Unity 生成目录（不入库）
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/MemoryCaptures/
+
+# 资产记录
+/[Aa]ssets/[Aa]ssetStoreTools*
+/[Aa]ssets/[Rr]ecordings/
+
+# .meta 跟随资产本身，资产入库则 meta 必须入库
+!/[Aa]ssets/**/*.meta
+
+# IDE 与编译产物
+.vs/
+.idea/
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+sysinfo.txt
+
+# 构建产物
+*.apk
+*.aab
+*.unitypackage
+*.app
+*.xcworkspace/
+
+# Addressables 打包缓存
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+
+# Android 临时自动生成资产
+/[Aa]ssets/[Ss]treamingAssets/aa.meta
+/[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# AI 工作流：证据与临时产物不入库
+AI_Context/EVIDENCE/**/tmp_*
+*.log

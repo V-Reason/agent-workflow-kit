@@ -1,0 +1,17 @@
+{
+    "name": "GAMEDEV.UI",
+    "rootNamespace": "GAMEDEV.UI",
+    "references": [
+        "GAMEDEV.Core",
+        "GAMEDEV.Gameplay"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

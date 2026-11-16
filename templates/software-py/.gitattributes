@@ -1,0 +1,30 @@
+# 默认：文本文件 LF，二进制不做转换
+* text=auto eol=lf
+
+# 源码与配置强制 LF
+*.py text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.cfg text eol=lf
+
+# Windows 批处理强制 CRLF
+*.bat text eol=crlf
+
+# 二进制资产不做转换（需要 LFS 时自行添加 filter=lfs）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+*.db binary
+*.sqlite binary
+
+# 导出 diff 与统计时忽略的语言标记
+*.lock linguist-generated=true
