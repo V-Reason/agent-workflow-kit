@@ -1,70 +1,74 @@
 # AGENTS.md — <项目名> 项目级 Agent 规范（Unity 2D）
 
-> 本文件与套件总纲（agent-workflow-kit/AGENTS.md）叠加生效；本文件缺失的条款一律以套件总纲为准。
-> 每个会话启动必读；本项目类型为 **Unity 2D 游戏**（asmdef 分层，Unity 2022.3 LTS / Unity 6）。
+> 本文件只写 Unity 项目特有约束；角色、状态机、模型路由与通用红线以 `agent-workflow-kit/AGENTS.md` v3.0 为准。
 
-## 0. 授权门（最高优先级）
+## 0. 授权门
 
-- 只有用户明确批准的任务书版本（Status: APPROVED + APPROVAL_RECORD.md）构成写入授权。
-- 未批准：只读模式，可做 Preflight 检查与只读调查，禁止任何写入。
-- 修改范围 = 任务书第 6 章 File Scope 逐路径白名单；越界即停。
+- 写入必须有 CEO 批准的 PLAN 版本与 `APPROVAL_RECORD.md`。
+- 修改范围严格等于批准 File Scope；越界立即停止。
+- 未批准时只允许读仓、Preflight 和只读取材。
+- L0 可由 CEO 用三行 mini 简报直派 Worker，仍须 Diff 和 ACCEPTANCE；碰资产、asmdef 或配置即升级。
 
-## 1. 资产红线（Unity 特有，宁停勿猜）
+## 1. 资产红线
 
-1. Agent 不写 `.prefab` / `.unity` / `.asset` / `.unitypackage` / `.xlsx` 等序列化与二进制资产；这类改动一律进"用户手工清单"（每条含路径、期望值、判据），由用户在编辑器完成。
-2. `.meta` 必须与资产同进同出；发现资产与 .meta 不匹配、GUID 引用断裂的可能时立即停止。
-3. `Packages/manifest.json`、`ProjectSettings/`、渲染管线配置、asmdef 变更默认禁止，需重新审批。
-4. 不删除看似无用的资产、元文件或目录；引用断裂在编辑器里才可见，Git 层面看不出来。
-5. 高风险操作三件套：备份分支 + `--no-commit --no-ff` + 每文件一句话回滚命令。
+1. Agent 永不直接写 `.prefab / .unity / .asset / .unitypackage / .xlsx`；此类操作交给 CEO 手工清单。
+2. `.meta` 必须与资产同进同出；GUID 断裂、资产两端存在性不明时停止。
+3. `ProjectSettings/`、`Packages/manifest.json`、渲染管线、asmdef references 默认禁止，需专项批准。
+4. 不删除看似无用的资产、元文件或目录。
+5. 手工清单每条必须含路径、操作、期望值与判据。
 
-## 2. 门禁清单（VALIDATING 前必须全过）
+## 2. 正式入口
 
-| 门禁 | 操作 | 期望 |
+- 项目看板：`AI_Context/PROJECT_BOARD.md`
+- 上下文：`00_CONTEXT_MANIFEST.md` + `FEED_DROP/`
+- 施工员：`worker-engine`
+- 独立监察：`watchdog-inspector`
+
+```bash
+python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 --files Assets/Scripts/Core/GameClock.cs
+python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for worker
+python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for watchdog
+```
+
+## 3. 门禁
+
+| 门禁 | 命令 / 操作 | 期望 |
 | --- | --- | --- |
-| 编译 | Unity 打开工程 | Console 0 error |
-| EditMode 测试 | Test Runner > EditMode > Run All | 全绿（基线 6 用例） |
-| 结构审计 | GAMEDEV > 审计 > 项目结构审计 | FAIL = 0 |
-| 交接包校验 | `python scripts/validate_handover.py <任务目录> --for verifier` | exit 0 |
+| 程序集编译 | Unity 打开工程 | Console 0 error |
+| EditMode | Test Runner > EditMode > Run All | 全绿 |
+| 结构审计 | `RunBatchAudit` 或菜单审计 | exit code / FAIL = 0 |
+| 交接包 | `validate_handover.py --for watchdog` | exit 0 |
 
-批处理审计命令见 `AI_Context/BUILD_AND_TEST.md`。
+批处理命令以 `AI_Context/BUILD_AND_TEST.md` 为唯一来源。`RunBatchAudit` 自己退出，禁止再追加 `-quit`。
 
-## 3. 分层红线（对齐 AI_Context/ARCHITECTURE.md）
+## 4. 分层红线
 
-1. 依赖方向：Gameplay → Core，UI → Gameplay → Core，EditorTools → Core；改 asmdef references 需重审。
-2. Editor 代码只放 Editor 程序集；测试只放 Tests 程序集（UNITY_INCLUDE_TESTS）。
-3. 新系统默认放入现有层；新增程序集必须先登记 DECISION_LOG.md。
-4. Hot-Path 0 GC；物理走 FixedUpdate + Interpolate；高频检测 NonAlloc；渲染层级用 Sorting Layer。
+1. `GAMEDEV.EditorTools` 仅依赖 `GAMEDEV.Core`，Editor 平台限定。
+2. Runtime 与 Editor 代码物理隔离。
+3. 测试只放 `GAMEDEV.Tests.Editor` 或批准的测试程序集。
+4. Gameplay → Core；UI → Gameplay → Core；禁止循环。
+5. 新增 asmdef 或改 references 必须先登记 DECISION_LOG 并重新审批。
 
-## 4. 文件操作边界
+## 5. 工程纪律
 
-| 操作 | 默认 | 需要批准 |
-| --- | --- | --- |
-| 读 src 脚本/AI_Context/文档 | 允许 | 用户目录、密钥 |
-| 创建/修改 .cs / .asmdef / .md | 仅任务书白名单路径 | 白名单外任何路径 |
-| 资产（prefab/unity/asset/xlsx） | 禁止 | 永远走用户手工清单 |
-| 删除/重命名 | 禁止 | 逐路径列出并说明回滚 |
-| manifest/ProjectSettings/管线 | 禁止 | 任务书披露 + 用户批准 |
-| Git commit/push | 禁止 | 用户明确说"提交" |
+- 不虚构 Unity API；先核当前引擎版本。
+- 物理使用 FixedUpdate；高频检测避免无界分配。
+- 顿帧/慢动作走 `GameClock` 独立时间通道，不篡改全局 `Time.timeScale`。
+- Hot Path 0 GC 目标必须用 Profiler 证据，不用口头顶替。
+- 编译通过不代表行为正确；生命周期、序列化、资产引用和运行时必须分别验证。
 
-## 5. 执行纪律
+## 6. 技能装载
 
-1. Preflight 六项逐项完成并写入执行报告第 1 节；Unity 版本与打开状态在 Preflight 记录。
-2. 不虚构 API：Unity API 先核对当前版本（2022.3 LTS / Unity 6 差异显著）；不把编译通过当成功能正确。
-3. 编译通过只证明语法接受；生命周期、序列化、Prefab 引用、管线兼容必须分开验证。
-4. 尝试额度 A01–A03；停止条件见套件总纲第 7/10 节；连续两轮无可验证进展即停。
-5. 长任务安排在错峰时段（北京时间 12:00–14:00、18:00–次日 09:00、周末节假日）。
-
-## 6. 交接与归档
-
-- 任务目录：`AI_Context/TASKS/GD-YYYY-NNNN/`（七件套模板在 `TASKS/_templates/`）。
-- 证据归档：`AI_Context/EVIDENCE/GD-YYYY-NNNN/`（Console 截图、Test Runner 结果、审计输出）。
-- 验收通过 24 小时内提交上下文回写提案，用户审阅合入；MODULE_MAP 漂移随之修正。
-
-## 7. 技能装载
-
-| 场景 | 加载 |
+| 阶段 | 加载 |
 | --- | --- |
-| 规划/分级/任务书 | planner-orchestrator（+ unity2d-architect 叠加；玩法系统 + game-systems-designer） |
-| 执行 | executor-engine（单独装载；顾问约束已固化在批准版任务书第 4/5/8 章中，执行期不重复挂载顾问） |
-| 验证 | engineering-verifier（独立会话/实例，禁止自证） |
-| 失败/指标复盘 | failure-retrospector |
+| 运营、登记、备菜、回写 | `secretary-router`（Agent） |
+| 规划与任务书 | `planner-orchestrator` + `task-brief-writer`；按需只读叠加 `unity2d-architect` / `game-systems-designer` |
+| 施工 | `worker-engine` 单装；不加载顾问 |
+| L1/L2 验证 | `watchdog-inspector` 独立会话/实例 |
+| 软故障复盘 | `watchdog-inspector`，只出提案 |
+
+## 7. 归档
+
+- 证据：`AI_Context/EVIDENCE/GD-YYYY-NNNN/`
+- CEO 验收：`ACCEPTANCE.md`
+- 验收后 24 小时内由 Secretary 依据 diff 起草上下文回写提案，CEO 审阅合入。

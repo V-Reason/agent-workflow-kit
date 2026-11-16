@@ -1,8 +1,8 @@
 # ACCEPTANCE — 验收回执模板（第 12 章）
 
-> 使用：验证员（独立于 Executor）生成事实部分；最终决定由用户作出。
+> 使用：Watchdog（独立于 Worker）生成事实部分；最终决定由 CEO 作出。
 
-Task ID: GD-YYYY-NNNN / 验收人: <验证员> / 时间: <YYYY-MM-DD HH:MM 时区>
+Task ID: GD-YYYY-NNNN / 验收人: <Watchdog> / 时间: <YYYY-MM-DD HH:MM 时区>
 验证层次: V0–V5 实际执行项：<列出>
 
 | 项 | 期望 | 实测 | 证据 |
@@ -16,6 +16,6 @@ Task ID: GD-YYYY-NNNN / 验收人: <验证员> / 时间: <YYYY-MM-DD HH:MM 时�
 未解决问题与警告:
 - <逐条列出；无则写 none>
 
-结论建议: PASS / PASS WITH WARNINGS / FAIL
+Watchdog 结论建议: PASS / PASS WITH WARNINGS / FAIL
 用户决定: ACCEPT / ACCEPT WITH FOLLOW-UP / REJECT
-后续动作: <FOLLOW-UP 转新任务；REJECT 按 v2.0 第 13 章处理；ACCEPTED 后 24h 内提交上下文回写提案>
+后续动作: <FOLLOW-UP 转新任务；REJECT 按 v3.0 第 13 章处理；ACCEPTED 后 24h 内提交上下文回写提案>

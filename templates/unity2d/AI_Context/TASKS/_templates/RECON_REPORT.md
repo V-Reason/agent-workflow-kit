@@ -2,8 +2,8 @@
 
 > 使用：上下文缺失或超预算时由取材员（只读形态）填写，产出后并入上下文包；不构成执行授权。
 
-Task ID: GD-YYYY-NNNN / 请求人: <用户或 Planner> / 调查时间: <YYYY-MM-DD HH:MM 时区>
-调查者: <Agent 平台只读任务 或 Executor 只读形态>
+Task ID: GD-YYYY-NNNN / 请求人: <CEO 或 Planner> / 调查时间: <YYYY-MM-DD HH:MM 时区>
+调查者: <Secretary 只读取材或独立只读 Agent>
 
 ## 1. Scope
 允许读取的路径与搜索范围（逐条列出）：
@@ -27,13 +27,13 @@ MODULE_MAP 核验：<一致 / 漂移>（漂移文件与现状逐条列出）
 风险点与疑似坑（引用文件与行号）：
 - <风险 1>
 
-## 6. Context Packet
-建议包：固定前缀复用项 + L2 选段 + L3 文件，预估 tokens 与成本
-- 固定前缀：<复用 vNN>；L2：<选段>；L3：<文件清单，预估 <n> tokens>
+## 6. Context Manifest
+建议由 `stage_context.py` 物理投喂的真实文件与 Token 预算：
+- 固定层：<核对 L1>；模块层：<核对 L2>；代码层：<文件清单与估算>
 
 ## 7. Evidence
 命令、搜索关键词与输出位置：
 - <命令 / 关键词 → EVIDENCE 路径>
 
-去向：并入 Context Packet（版本号递增）→ 回 PLANNING / 原阶段。
+去向：由 Secretary 用 `stage_context.py --append` 补拷并更新 Manifest → 回 PLANNING / 原阶段。
 本报告不构成执行授权，不得包含任何项目文件修改。

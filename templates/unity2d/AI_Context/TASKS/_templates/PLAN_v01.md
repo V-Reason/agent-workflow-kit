@@ -1,4 +1,4 @@
-# AI ENGINEERING TASK SPECIFICATION — 工程任务书模板 v2（附录 D · Unity 版）
+# AI ENGINEERING TASK SPECIFICATION — 工程任务书模板 v3.0（Unity 版）
 
 > 使用：复制到任务目录改名 PLAN_v01.md；Planner 填写；状态只能是 DRAFT / NEED_INVESTIGATION，
 > APPROVED 由用户审阅后亲自修改并写 APPROVAL_RECORD.md。撰写纪律见 skills/task-brief-writer。
@@ -9,8 +9,9 @@ Task Level: L1 / Risk Level: R1
 Project: <项目名> / Engine Version: Unity 2022.3 LTS 或 Unity 6 / Platform: <目标平台>
 Branch / Base Commit: <分支 / commit；无 Git 写可恢复副本时间>
 Planner: <模型> + chat 模式 + high 档位建议（L2 改 xhigh）
-Executor: <模型> + agent 模式
-Context Packet: v01 + commit <哈希>
+Worker: <模型> + agent 模式
+Watchdog: <独立会话/实例 + 模型 + 档位>
+Context Manifest: 00_CONTEXT_MANIFEST.md + Base Commit <哈希或恢复时间>
 Execution Attempt Cap: A01-A03
 Created At: <YYYY-MM-DD HH:MM 时区> / Approved By: <留空> / Approved At: <留空>
 

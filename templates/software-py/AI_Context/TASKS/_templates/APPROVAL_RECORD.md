@@ -1,6 +1,6 @@
 # APPROVAL RECORD — 批准记录模板（第 10.3 节）
 
-> 使用：用户审阅任务书后填写；把 PLAN_vNN.md 的 Status 改为 APPROVED 属于用户的动作，Executor 不得代写。
+> 使用：用户审阅任务书后填写；把 PLAN_vNN.md 的 Status 改为 APPROVED 属于用户的动作，Worker 不得代写。
 
 Task ID / Approved Plan: GD-YYYY-NNNN / vNN
 Decision: APPROVED

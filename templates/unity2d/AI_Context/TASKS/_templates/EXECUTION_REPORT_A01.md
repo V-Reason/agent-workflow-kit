@@ -1,9 +1,9 @@
 # EXECUTION REPORT — 执行报告模板（附录 E · Unity 版）
 
-> 使用：Executor 每次尝试一份，改名 EXECUTION_REPORT_A01.md / A02 / A03；结论用语严格枚举。
+> 使用：Worker 每次尝试一份，改名 EXECUTION_REPORT_A01.md / A02 / A03；结论用语严格枚举。
 
 Task ID: GD-YYYY-NNNN / Plan Version: vNN / Attempt: A01
-Executor（模型与模式）: <模型 + agent/对话> / 思考档位: <low/medium/high/xhigh/不适用>
+Worker（模型与模式）: <模型 + agent/对话> / 思考档位: <low/medium/high/xhigh/不适用>
 执行时间: <YYYY-MM-DD HH:MM 时区> / Unity 版本: <2022.3.x / 6000.x> / 分支与 Base Commit: <...>
 
 ## 1. Preflight
