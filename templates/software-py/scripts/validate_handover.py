@@ -1,26 +1,5 @@
 #!/usr/bin/env python3
-"""validate_handover.py — 统一交接包校验器（Agent 工作流 v2.0 第 7 章 / 表 15）
-
-校验 AI_Context/TASKS/GD-YYYY-NNNN/ 下交接包七件套的结构完整性。
-只做结构校验，不替代编译、测试与人工审查。
-
-用法：
-    python scripts/validate_handover.py <task_dir> [--for planner|executor|verifier|archive] [--l0] [--json] [--list]
-
-模式与必查件：
-    planner  : TASK_BRIEF.md + CONTEXT_PACKET_vNN.md + PLAN_vNN.md（草案态）
-    executor : planner 三件 + PLAN 状态为 APPROVED + APPROVAL_RECORD.md
-    verifier : executor 四件 + EXECUTION_REPORT_Axx.md
-    archive  : verifier 五件 + ACCEPTANCE.md
-
-L0 快速通道（--l0，与 --for 正交）：
-    - 放行无 PLAN_vNN.md、无 APPROVAL_RECORD.md；CONTEXT_PACKET_vNN.md 可选（存在则照常校验格式）。
-    - TASK_BRIEF.md 允许标准 10 段，或 L0 三行 mini 任务书（含 L0 标识、目标与验收、文件范围，无 <> 占位符）。
-    - 目录内若存在 PLAN_vNN.md，其 Task Level 必须为 L0（L1/L2/L3 → FAIL，防止借 L0 绕过审批）。
-    - --l0 --for verifier 必查 TASK_BRIEF.md + EXECUTION_REPORT_A0x.md；--l0 --for archive 追加必查 ACCEPTANCE.md。
-
-退出码：0 = 全部 PASS（WARN 不影响）；1 = 存在 FAIL。
-"""
+"""validate_handover.py - v3.0 unified FEED_DROP handover validator."""
 
 from __future__ import annotations
 
@@ -29,12 +8,29 @@ import json
 import re
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePath
 
 TASK_DIR_PATTERN = re.compile(r"^GD-\d{4}-\d{4}$")
 PLAN_FILE_PATTERN = re.compile(r"^PLAN_v(\d{2})\.md$")
-CONTEXT_PACKET_PATTERN = re.compile(r"^CONTEXT_PACKET_v(\d{2})\.md$")
 EXEC_REPORT_PATTERN = re.compile(r"^EXECUTION_REPORT_A0([1-3])\.md$")
+MANIFEST_ENTRY_RE = re.compile(
+    r"^\|\s*`?(?P<staged>[^|`]+?)`?\s*\|\s*(?P<layer>L[123])\s*\|"
+    r"\s*`?(?P<source>[^|`]+?)`?\s*\|\s*(?P<tokens>\d+)\s*\|$"
+)
+COMMIT_HEX_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+COMMIT_TS_RE = re.compile(r"\d{4}-\d{2}-\d{2}([T ]\d{1,2}:\d{2}(:\d{2})?)?")
+PLAN_VERSION_FIELD_RE = re.compile(r"Plan\s*Version[:：]?\s*v?(\d{2})", re.IGNORECASE)
+TASK_LEVEL_FIELD_RE = re.compile(r"Task\s*Level[:：]?\s*L(\d)", re.IGNORECASE)
+CONCLUSION_LINE_RE = re.compile(
+    r"^(?:\*\*)?Conclusion(?:\*\*)?[:：][ \t]*(.+?)[ \t]*$", re.MULTILINE
+)
+ACCEPTANCE_DECISION_LINE_RE = re.compile(
+    r"^(?:\*\*)?(?:用户决定|Decision)(?:\*\*)?[:：][ \t]*(.+?)[ \t]*$",
+    re.MULTILINE,
+)
+APPROVAL_DECISION_LINE_RE = re.compile(
+    r"^(?:\*\*)?Decision(?:\*\*)?[:：][ \t]*(.+?)[ \t]*$", re.MULTILINE
+)
 
 TASK_BRIEF_SECTIONS = [
     "Objective",
@@ -48,7 +44,6 @@ TASK_BRIEF_SECTIONS = [
     "验收方式",
     "其他说明",
 ]
-
 PLAN_SECTIONS = [
     "0. Metadata",
     "1. Objective",
@@ -66,7 +61,6 @@ PLAN_SECTIONS = [
     "13. Open Questions",
     "14. Approval",
 ]
-
 EXEC_REPORT_SECTIONS = [
     "1. Preflight",
     "2. Actual Changes",
@@ -80,7 +74,6 @@ EXEC_REPORT_SECTIONS = [
     "10. Rollback",
     "11. Conclusion",
 ]
-
 RECON_SECTIONS = [
     "1. Scope",
     "2. Repo Map Check",
@@ -91,50 +84,32 @@ RECON_SECTIONS = [
     "7. Evidence",
 ]
 
-PLAN_ALLOWED_STATUSES_PLANNER = {"DRAFT", "NEED_INVESTIGATION", "IN_REVIEW"}
-PLAN_ALLOWED_STATUSES_EXECUTOR = {"APPROVED"}
+PLAN_ALLOWED_STATUSES_PLANNER = {"DRAFT", "NEED_INVESTIGATION", "IN_REVIEW", "APPROVED"}
+PLAN_ALLOWED_STATUSES_WORKER = {"APPROVED"}
 CONCLUSION_ENUM = {"PASS", "PASS WITH WARNINGS", "FAIL", "BLOCKED", "NOT RUN"}
 ACCEPTANCE_DECISIONS = {"ACCEPT", "ACCEPT WITH FOLLOW-UP", "REJECT"}
 APPROVAL_DECISIONS = {"APPROVED", "APPROVED WITH CONDITIONS"}
-
-MODES = ("planner", "executor", "verifier", "archive")
-
-# ---- 占位符与字段正则 ----
-ANGLE_PLACEHOLDER_RE = re.compile(r"<[^>\n]+>")
-COMMIT_FIELD_RE = re.compile(r"commit[:：]?\s*([^\n]+)", re.MULTILINE | re.IGNORECASE)
-COMMIT_HEX_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
-COMMIT_TS_RE = re.compile(r"\d{4}-\d{2}-\d{2}([T ]\d{1,2}:\d{2}(:\d{2})?)?")
-PLAN_VERSION_FIELD_RE = re.compile(r"Plan\s*Version[:：]?\s*v?(\d{2})", re.IGNORECASE)
-TASK_LEVEL_FIELD_RE = re.compile(r"Task\s*Level[:：]?\s*L(\d)", re.IGNORECASE)
-CONCLUSION_LINE_RE = re.compile(r"^(?:\*\*)?Conclusion(?:\*\*)?[:：][ \t]*(.+?)[ \t]*$", re.MULTILINE)
-ACCEPTANCE_DECISION_LINE_RE = re.compile(
-    r"^(?:\*\*)?(?:用户决定|Decision)(?:\*\*)?[:：][ \t]*(.+?)[ \t]*$", re.MULTILINE
-)
-APPROVAL_DECISION_LINE_RE = re.compile(r"^(?:\*\*)?Decision(?:\*\*)?[:：][ \t]*(.+?)[ \t]*$", re.MULTILINE)
-APPROVAL_FIELD_KEYS = ["Approved Scope", "Base Commit", "Approver", "Approval Time"]
+MODES = ("planner", "worker", "watchdog", "archive")
+LEGACY_MODE_HINTS = {
+    "executor": "worker",
+    "verifier": "watchdog",
+}
 L0_MINI_REQUIRED_MARKS = ["目标与验收", "文件范围"]
 
-
-def _is_commit_placeholder(value: str) -> bool:
-    if ANGLE_PLACEHOLDER_RE.search(value):
-        return True
-    return "待填写" in value or "TBD" in value.upper()
-
-
-def _is_commit_legal(value: str) -> bool:
-    if COMMIT_HEX_RE.fullmatch(value):
-        return True
-    if "可恢复副本" in value:
-        return True
-    return bool(COMMIT_TS_RE.search(value))
+REQUIRED_FEED_FILES = {
+    "L1__PROJECT_OVERVIEW.md",
+    "L1__CODING_STANDARDS.md",
+    "L1__BUILD_AND_TEST.md",
+    "L2__ARCHITECTURE.md",
+    "L2__MODULE_MAP.md",
+}
+APPROVAL_FIELD_KEYS = ["Approved Scope", "Base Commit", "Approver", "Approval Time"]
 
 
 @dataclass
 class CheckResult:
-    """单条校验结果。"""
-
     item: str
-    status: str  # PASS / FAIL / WARN
+    status: str
     detail: str = ""
 
     @property
@@ -144,8 +119,6 @@ class CheckResult:
 
 @dataclass
 class Report:
-    """一次校验运行的全部结果。"""
-
     task_dir: str
     mode: str
     l0: bool = False
@@ -156,31 +129,33 @@ class Report:
 
     @property
     def fails(self) -> list[CheckResult]:
-        return [c for c in self.checks if c.failed]
+        return [check for check in self.checks if check.failed]
 
     @property
     def warns(self) -> list[CheckResult]:
-        return [c for c in self.checks if c.status == "WARN"]
+        return [check for check in self.checks if check.status == "WARN"]
 
     @property
     def ok(self) -> bool:
         return not self.fails
 
     def render(self) -> str:
-        tag = f" / L0 快速通道" if self.l0 else ""
+        tag = " / L0 快速通道" if self.l0 else ""
         lines = [f"交接包校验：{self.task_dir}（模式 {self.mode}{tag}）", "-" * 64]
-        for c in self.checks:
-            mark = {"PASS": "[PASS]", "FAIL": "[FAIL]", "WARN": "[WARN]"}[c.status]
-            line = f"{mark} {c.item}"
-            if c.detail:
-                line += f" — {c.detail}"
+        for check in self.checks:
+            mark = {"PASS": "[PASS]", "FAIL": "[FAIL]", "WARN": "[WARN]"}[check.status]
+            line = f"{mark} {check.item}"
+            if check.detail:
+                line += f" - {check.detail}"
             lines.append(line)
-        lines.append("-" * 64)
-        lines.append(
-            f"结果：PASS {len(self.checks) - len(self.fails) - len(self.warns)}"
-            f" / FAIL {len(self.fails)} / WARN {len(self.warns)}"
+        lines.extend(
+            [
+                "-" * 64,
+                f"结果：PASS {len(self.checks) - len(self.fails) - len(self.warns)}"
+                f" / FAIL {len(self.fails)} / WARN {len(self.warns)}",
+                "结论：通过" if self.ok else "结论：未通过（先修复 FAIL 再交接）",
+            ]
         )
-        lines.append("结论：通过" if self.ok else "结论：未通过（先修复 FAIL 再交接）")
         return "\n".join(lines)
 
     def to_json(self) -> str:
@@ -191,8 +166,8 @@ class Report:
                 "l0": self.l0,
                 "ok": self.ok,
                 "checks": [
-                    {"item": c.item, "status": c.status, "detail": c.detail}
-                    for c in self.checks
+                    {"item": check.item, "status": check.status, "detail": check.detail}
+                    for check in self.checks
                 ],
             },
             ensure_ascii=False,
@@ -208,47 +183,111 @@ def _read(path: Path) -> str:
 
 
 def _has_heading(text: str, heading: str) -> bool:
-    """匹配 Markdown 标题行（## 1. Objective），容忍多余空格与可选序号句点。"""
-    tokens = [re.escape(t) for t in heading.split()]
+    tokens = [re.escape(token) for token in heading.split()]
     pattern = re.compile(
-        r"^#{1,4}\s*" + r"\s+".join(tokens) + r"\s*$", re.MULTILINE | re.IGNORECASE
+        r"^#{1,4}\s*" + r"\s+".join(tokens) + r"\s*$",
+        re.MULTILINE | re.IGNORECASE,
     )
     return bool(pattern.search(text))
 
 
 def _find_latest(directory: Path, pattern: re.Pattern[str]) -> tuple[Path | None, int]:
-    """按版本号取最新文件；返回 (最新文件, 匹配文件总数)。pattern 须含一个版本号捕获组。"""
-    found = [p for p in directory.iterdir() if p.is_file() and pattern.match(p.name)]
+    found = [path for path in directory.iterdir() if path.is_file() and pattern.match(path.name)]
     if not found:
         return None, 0
-    latest = max(found, key=lambda p: int(pattern.match(p.name).group(1)))  # type: ignore[union-attr]
+    latest = max(found, key=lambda path: int(pattern.match(path.name).group(1)))  # type: ignore[union-attr]
     return latest, len(found)
 
 
+def _find_all_plans(directory: Path) -> list[Path]:
+    return sorted(
+        (
+            path
+            for path in directory.iterdir()
+            if path.is_file() and PLAN_FILE_PATTERN.match(path.name)
+        ),
+        key=lambda path: (
+            int(PLAN_FILE_PATTERN.match(path.name).group(1)),  # type: ignore[union-attr]
+            path.name,
+        ),
+    )
+
+
 def _latest_detail(name: str, count: int) -> str:
-    if count > 1:
-        return f"已选最新（共 {count} 个版本）：{name}"
-    return name
+    return f"已选最新（共 {count} 个版本）：{name}" if count > 1 else name
+
+
+def _normalize_value(value: str) -> str:
+    normalized = value.strip().strip("`").strip("*").strip()
+    return re.sub(r"\s+", " ", normalized)
+
+
+def _is_placeholder_value(value: str) -> bool:
+    normalized = _normalize_value(value)
+    if not normalized:
+        return True
+    if re.fullmatch(r"<[^>\n]+>", normalized):
+        return True
+    if normalized.casefold() in {"tbd", "todo", "待填写", "待填"}:
+        return True
+    return False
+
+
+def _is_commit_legal(value: str) -> bool:
+    normalized = _normalize_value(value)
+    if COMMIT_HEX_RE.fullmatch(normalized):
+        return True
+    if "可恢复副本" in normalized:
+        return True
+    return bool(COMMIT_TS_RE.search(normalized))
+
+
+def _field_value(text: str, key: str) -> str | None:
+    match = re.search(
+        rf"^[^\n]*?{re.escape(key)}[:：][ \t]*(.+?)[ \t]*$",
+        text,
+        re.MULTILINE,
+    )
+    return match.group(1) if match else None
+
+
+def _approval_field_block(text: str, key: str) -> str | None:
+    match = re.search(
+        rf"^[^\n]*?{re.escape(key)}[:：][ \t]*([^\n]*)$",
+        text,
+        re.MULTILINE,
+    )
+    if match is None:
+        return None
+    lines = [match.group(1)]
+    for line in text[match.end() :].splitlines():
+        if not line.strip():
+            continue
+        if re.match(r"^[A-Za-z][A-Za-z /_]+[:：]", line):
+            break
+        lines.append(line)
+    block = "\n".join(lines).strip()
+    return block or None
 
 
 def check_task_brief(directory: Path, report: Report, l0: bool = False) -> None:
     path = directory / "TASK_BRIEF.md"
     if not path.is_file():
-        report.add("1. TASK_BRIEF.md", "FAIL", "缺少文件（用户任务简报，附录 C）")
+        report.add("1. TASK_BRIEF.md", "FAIL", "缺少用户任务简报")
         return
     text = _read(path)
-    missing = [s for s in TASK_BRIEF_SECTIONS if s not in text]
+    missing = [section for section in TASK_BRIEF_SECTIONS if section not in text]
     if not missing:
         report.add("1. TASK_BRIEF.md", "PASS", "10 段结构齐全")
         return
+    if l0 and _check_l0_mini_brief(text):
+        report.add("1. TASK_BRIEF.md", "PASS", "L0 三行 mini 任务书要素齐全")
+        return
     if l0:
-        if _check_l0_mini_brief(text):
-            report.add("1. TASK_BRIEF.md", "PASS", "L0 三行 mini 任务书（要素齐全）")
-            return
         report.add(
             "1. TASK_BRIEF.md",
             "FAIL",
-            "非标准 10 段，且不满足 L0 mini 要求（须含 L0 标识、目标与验收、文件范围，且无 <> 占位符）",
+            "须为标准 10 段，或含 L0、目标与验收、文件范围的 mini 简报",
         )
         return
     report.add("1. TASK_BRIEF.md", "FAIL", f"缺少 {len(missing)} 段：{'、'.join(missing)}")
@@ -259,277 +298,295 @@ def _check_l0_mini_brief(text: str) -> bool:
         return False
     if any(mark not in text for mark in L0_MINI_REQUIRED_MARKS):
         return False
-    if ANGLE_PLACEHOLDER_RE.search(text):
-        return False
+    for line in text.splitlines():
+        if any(mark in line for mark in L0_MINI_REQUIRED_MARKS):
+            value = re.split(r"[:：]", line, maxsplit=1)[-1].strip()
+            if _is_placeholder_value(value):
+                return False
     return True
 
 
-def check_context_packet(directory: Path, report: Report, mode: str) -> None:
-    path, count = _find_latest(directory, CONTEXT_PACKET_PATTERN)
-    if path is None:
-        report.add(
-            "2. CONTEXT_PACKET_vNN.md", "FAIL", "缺少文件（须含版本号 + 核验 commit）"
-        )
-        return
-    text = _read(path)
-    version_ok = re.search(r"v\d{2}", path.name) or re.search(
-        r"版本[:：]?\s*v\d{2}", text
-    )
-    if not version_ok:
-        report.add(
-            "2. CONTEXT_PACKET_vNN.md", "FAIL", "须写明上下文包版本号（第 6.4 节硬性条款）"
-        )
-        return
+def _safe_manifest_mapping(staged: str, source: str) -> str | None:
+    path = PurePath(staged)
+    if path.is_absolute() or path.name != staged or ".." in path.parts:
+        return f"暂存名越界：{staged}"
+    if source == "git:recent":
+        return None
+    source_path = PurePath(source)
+    if source_path.is_absolute() or ".." in source_path.parts:
+        return f"原路径越界：{source}"
+    return None
 
-    field_match = COMMIT_FIELD_RE.search(text)
-    if field_match is None:
+
+def check_context_manifest(directory: Path, report: Report, task_id: str) -> None:
+    manifest = directory / "00_CONTEXT_MANIFEST.md"
+    if not manifest.is_file():
         report.add(
-            "2. CONTEXT_PACKET_vNN.md",
+            "2. CONTEXT MANIFEST + FEED_DROP",
             "FAIL",
-            "未找到 commit 字段（须写明核验 commit 或可恢复副本时间）",
+            "缺少 00_CONTEXT_MANIFEST.md",
         )
         return
-    value = field_match.group(1).strip().strip("`").strip()
-    if _is_commit_placeholder(value):
-        if mode == "planner":
-            report.add(
-                "2. CONTEXT_PACKET_vNN.md",
-                "WARN",
-                f"commit 仍为占位符（{value}）：规划阶段允许，交接执行前必须落实为真实 commit 或副本时间",
-            )
-        else:
-            report.add(
-                "2. CONTEXT_PACKET_vNN.md",
-                "FAIL",
-                f"commit 为占位符（{value}）：{mode} 模式下必须为真实值",
-            )
-        return
-    if _is_commit_legal(value):
-        report.add("2. CONTEXT_PACKET_vNN.md", "PASS", _latest_detail(f"{path.name}（commit: {value}）", count))
+    text = _read(manifest)
+
+    manifest_task_id = _field_value(text, "Task ID")
+    if manifest_task_id is None or TASK_DIR_PATTERN.fullmatch(task_id) is None:
+        report.add("2b. Manifest Task ID", "FAIL", f"无法核对 Task ID：{task_id}")
+    elif manifest_task_id.strip() == task_id:
+        report.add("2b. Manifest Task ID", "PASS", task_id)
     else:
         report.add(
-            "2. CONTEXT_PACKET_vNN.md",
+            "2b. Manifest Task ID",
             "FAIL",
-            f"commit 值非法（{value}）：须为 7–40 位十六进制哈希，或可恢复副本时间戳（如 2026-11-16 14:00）",
+            f"Manifest 为 {manifest_task_id.strip()}，目录为 {task_id}",
         )
+
+    commit = _field_value(text, "Base Commit")
+    if commit is None:
+        report.add("2a. Manifest 基线", "FAIL", "缺少 Base Commit 字段")
+    elif _is_placeholder_value(commit):
+        report.add("2a. Manifest 基线", "FAIL", f"Base Commit 仍为占位符：{commit}")
+    elif _is_commit_legal(commit):
+        report.add("2a. Manifest 基线", "PASS", _normalize_value(commit))
+    else:
+        report.add("2a. Manifest 基线", "FAIL", f"Base Commit 非法：{commit}")
+
+    feed = directory / "FEED_DROP"
+    feed_files = (
+        {path.name for path in feed.iterdir() if path.is_file()} if feed.is_dir() else set()
+    )
+    if not feed_files:
+        report.add("2. CONTEXT MANIFEST + FEED_DROP", "FAIL", "FEED_DROP 不存在或为空")
+    else:
+        report.add(
+            "2. CONTEXT MANIFEST + FEED_DROP",
+            "PASS",
+            f"Manifest 存在，FEED_DROP 含 {len(feed_files)} 个文件",
+        )
+
+    mappings: list[tuple[str, str]] = []
+    for line in text.splitlines():
+        match = MANIFEST_ENTRY_RE.match(line)
+        if match:
+            mappings.append((match.group("staged").strip(), match.group("source").strip()))
+    if not mappings:
+        report.add("2c. 文件映射表", "FAIL", "Manifest 未包含可解析的文件映射表")
+        return
+
+    mapping_errors = [
+        error
+        for staged, source in mappings
+        if (error := _safe_manifest_mapping(staged, source)) is not None
+    ]
+    if mapping_errors:
+        report.add("2c. 文件映射表", "FAIL", "；".join(mapping_errors))
+    else:
+        report.add("2c. 文件映射表", "PASS", f"{len(mappings)} 条映射路径合法")
+
+    mapped_names = {staged for staged, _ in mappings}
+    missing_required = sorted(REQUIRED_FEED_FILES - mapped_names)
+    missing_files = sorted(mapped_names - feed_files)
+    missing_required_files = sorted(REQUIRED_FEED_FILES - feed_files)
+    if missing_required or missing_files or missing_required_files:
+        details: list[str] = []
+        if missing_required:
+            details.append(f"映射表缺必需项：{', '.join(missing_required)}")
+        if missing_files:
+            details.append(f"映射文件实体缺失：{', '.join(missing_files)}")
+        if missing_required_files:
+            details.append(f"FEED_DROP 缺必需文件：{', '.join(missing_required_files)}")
+        report.add("2d. 映射实体", "FAIL", "；".join(details))
+    else:
+        report.add("2d. 映射实体", "PASS", "所有映射与必需文件均存在")
+
+    extras = sorted(feed_files - mapped_names)
+    if extras:
+        report.add("2e. 额外文件", "WARN", f"未列入清单：{', '.join(extras)}")
+    else:
+        report.add("2e. 额外文件", "PASS", "无未映射文件")
 
 
 def check_plan(directory: Path, report: Report, mode: str, plan_ver: str | None) -> None:
     path, count = _find_latest(directory, PLAN_FILE_PATTERN)
     if path is None:
-        report.add("4. PLAN_vNN.md", "FAIL", "缺少任务书草案（附录 D，14 章）")
+        report.add("4. PLAN_vNN.md", "FAIL", "缺少任务书草案（0.Metadata + 14 章）")
         return
     text = _read(path)
-    missing = [s for s in PLAN_SECTIONS if not _has_heading(text, s)]
+    missing = [section for section in PLAN_SECTIONS if not _has_heading(text, section)]
     if missing:
-        report.add(
-            "4. PLAN_vNN.md", "FAIL", f"缺少 {len(missing)} 章：{'; '.join(missing)}"
-        )
+        report.add("4. PLAN_vNN.md", "FAIL", f"缺少章节：{'; '.join(missing)}")
     else:
-        report.add("4. PLAN_vNN.md", "PASS", _latest_detail(f"{path.name}，0.Metadata + 14 章齐全", count))
+        report.add(
+            "4. PLAN_vNN.md",
+            "PASS",
+            _latest_detail(f"{path.name}，0.Metadata + 14 章齐全", count),
+        )
 
-    status_match = re.search(r"Status[:：]?\s*([A-Z_]+)", text)
-    status = status_match.group(1) if status_match else ""
+    status_value = _field_value(text, "Status")
+    status = _normalize_value(status_value or "").upper()
     allowed = (
-        PLAN_ALLOWED_STATUSES_EXECUTOR
-        if mode in ("executor", "verifier", "archive")
-        else PLAN_ALLOWED_STATUSES_PLANNER | PLAN_ALLOWED_STATUSES_EXECUTOR
+        PLAN_ALLOWED_STATUSES_WORKER
+        if mode in {"worker", "watchdog", "archive"}
+        else PLAN_ALLOWED_STATUSES_PLANNER
     )
     if status in allowed:
         report.add("4a. PLAN 状态", "PASS", f"Status: {status}")
-    elif status in PLAN_ALLOWED_STATUSES_PLANNER | PLAN_ALLOWED_STATUSES_EXECUTOR:
-        report.add(
-            "4a. PLAN 状态",
-            "FAIL",
-            f"Status: {status} 在 {mode} 模式下不合法，允许 {'/'.join(sorted(allowed))}",
-        )
     else:
         report.add(
             "4a. PLAN 状态",
             "FAIL",
-            "Metadata 中未找到合法 Status 字段（DRAFT / NEED_INVESTIGATION / APPROVED）",
+            f"Status: {status or '缺失'}，允许 {'/'.join(sorted(allowed))}",
         )
 
     task_id = directory.name
-    if not TASK_DIR_PATTERN.match(task_id):
-        report.add(
-            "4b. Task ID 一致",
-            "WARN",
-            f"目录名 {task_id or '<空>'} 不符合 GD-YYYY-NNNN，跳过一致性核对",
-        )
+    if TASK_DIR_PATTERN.fullmatch(task_id) is None:
+        report.add("4b. Task ID 一致", "WARN", f"目录名 {task_id} 不符合 GD-YYYY-NNNN")
     elif re.search(rf"\b{re.escape(task_id)}\b", text):
-        report.add("4b. Task ID 一致", "PASS", f"任务书引用 {task_id}")
+        report.add("4b. Task ID 一致", "PASS", task_id)
     else:
-        report.add("4b. Task ID 一致", "FAIL", f"任务书未引用目录名 {task_id}")
+        report.add("4b. Task ID 一致", "FAIL", f"任务书未引用 {task_id}")
 
-    # 4c. 文件名版本与正文 Plan Version 字段一致性
+    field_version = PLAN_VERSION_FIELD_RE.search(text)
     if plan_ver is None:
-        report.add("4c. 版本一致", "WARN", "无法从文件名解析版本号，跳过核对")
-    else:
-        field_ver = PLAN_VERSION_FIELD_RE.search(text)
-        if field_ver is None:
-            report.add(
-                "4c. 版本一致", "FAIL", "正文 Metadata 缺少 Plan Version 字段"
-            )
-        elif field_ver.group(1) != plan_ver:
-            report.add(
-                "4c. 版本一致",
-                "FAIL",
-                f"文件名 v{plan_ver} 与正文 Plan Version: v{field_ver.group(1)} 不一致",
-            )
-        else:
-            report.add("4c. 版本一致", "PASS", f"文件名与正文均为 v{plan_ver}")
-
-
-def check_plan_l0(directory: Path, plan_path: Path, report: Report) -> None:
-    """L0 快速通道下存在 PLAN 时的级别核验：防止高风险任务借 L0 绕过审批。"""
-    text = _read(plan_path)
-    level_match = TASK_LEVEL_FIELD_RE.search(text)
-    if level_match is None:
+        report.add("4c. 版本一致", "WARN", "无法从文件名解析版本号")
+    elif field_version is None:
+        report.add("4c. 版本一致", "FAIL", "正文缺少 Plan Version 字段")
+    elif field_version.group(1) != plan_ver:
         report.add(
-            "4d. L0 级别核验",
+            "4c. 版本一致",
             "FAIL",
-            f"目录内存在 {plan_path.name} 但未标注 Task Level，无法确认符合 L0 快速通道",
+            f"文件名 v{plan_ver} 与正文 v{field_version.group(1)} 不一致",
         )
+    else:
+        report.add("4c. 版本一致", "PASS", f"文件名与正文均为 v{plan_ver}")
+
+
+def check_plan_l0(directory: Path, report: Report) -> None:
+    plans = _find_all_plans(directory)
+    if not plans:
         return
-    level = int(level_match.group(1))
-    if level == 0:
-        report.add("4d. L0 级别核验", "PASS", f"{plan_path.name} 为 L0 级")
+    invalid: list[str] = []
+    missing_level: list[str] = []
+    for path in plans:
+        text = _read(path)
+        level_match = TASK_LEVEL_FIELD_RE.search(text)
+        if level_match is None:
+            missing_level.append(path.name)
+        elif int(level_match.group(1)) != 0:
+            invalid.append(f"{path.name}=L{level_match.group(1)}")
+    if missing_level or invalid:
+        details: list[str] = []
+        if invalid:
+            details.append(f"存在非 L0 计划：{', '.join(invalid)}")
+        if missing_level:
+            details.append(f"无法确认级别：{', '.join(missing_level)}")
+        report.add("4d. L0 级别核验", "FAIL", "；".join(details))
     else:
-        report.add(
-            "4d. L0 级别核验",
-            "FAIL",
-            f"L0 快速通道不允许 Task Level L{level} 的任务书（防止高风险任务借 L0 绕过审批）",
-        )
-
-
-def _approval_field_block(text: str, key: str) -> str | None:
-    """提取批准记录字段块：字段行 + 后续缩进/列表续行，直到空行或下一个字段。
-
-    容忍复合键名前缀（如模板中的 "Branch / Base Commit:"）。
-    """
-    match = re.search(
-        rf"^[^\n]*?{re.escape(key)}[:：][ \t]*([^\n]*)$", text, re.MULTILINE
-    )
-    if match is None:
-        return None
-    lines = [match.group(1)]
-    for line in text[match.end():].splitlines():
-        if not line.strip() or re.match(r"^[A-Za-z][A-Za-z /_]+[:：]", line):
-            break
-        lines.append(line)
-    return "\n".join(lines)
+        report.add("4d. L0 级别核验", "PASS", f"全部 {len(plans)} 个 PLAN 均为 L0")
 
 
 def check_approval_record(
-    directory: Path, report: Report, task_id: str, plan_ver: str | None
+    directory: Path,
+    report: Report,
+    task_id: str,
+    plan_ver: str | None,
 ) -> None:
     path = directory / "APPROVAL_RECORD.md"
     if not path.is_file():
-        report.add("5. APPROVAL_RECORD.md", "FAIL", "缺少批准记录（第 10.3 节）")
+        report.add("5. APPROVAL_RECORD.md", "FAIL", "缺少批准记录")
         return
     text = _read(path)
-
     decision_match = APPROVAL_DECISION_LINE_RE.search(text)
     if decision_match is None:
-        report.add(
-            "5. APPROVAL_RECORD.md",
-            "FAIL",
-            "未找到整行 Decision 字段（须为 APPROVED / APPROVED_WITH_CONDITIONS / APPROVED WITH CONDITIONS）",
-        )
+        report.add("5. APPROVAL_RECORD.md", "FAIL", "未找到整行 Decision 字段")
     else:
-        raw = decision_match.group(1).strip()
-        if "/" in raw or "或" in raw:
+        raw = _normalize_value(decision_match.group(1))
+        normalized = re.sub(r"\s+", " ", raw.replace("_", " ")).strip().upper()
+        if "/" in raw:
             report.add(
                 "5. APPROVAL_RECORD.md",
                 "FAIL",
-                f"Decision 含未消除的选项分隔（{raw}）：必须落实为单一决定",
+                f"Decision 含未消除选项：{raw}",
             )
+        elif normalized in APPROVAL_DECISIONS:
+            report.add("5. APPROVAL_RECORD.md", "PASS", f"Decision: {raw}")
         else:
-            normalized = re.sub(r"\s+", " ", raw.replace("_", " ")).strip().upper()
-            if normalized in APPROVAL_DECISIONS:
-                report.add("5. APPROVAL_RECORD.md", "PASS", f"Decision: {raw}")
-            else:
-                report.add(
-                    "5. APPROVAL_RECORD.md",
-                    "FAIL",
-                    f"Decision 非法（{raw}）：必须为 APPROVED / APPROVED_WITH_CONDITIONS / APPROVED WITH CONDITIONS",
-                )
+            report.add(
+                "5. APPROVAL_RECORD.md",
+                "FAIL",
+                "Decision 必须为 APPROVED / APPROVED_WITH_CONDITIONS / APPROVED WITH CONDITIONS",
+            )
 
-    missing = [k for k in APPROVAL_FIELD_KEYS if _approval_field_block(text, k) is None]
-    placeholder_keys = [
-        k
-        for k in APPROVAL_FIELD_KEYS
-        if (block := _approval_field_block(text, k)) is not None and ANGLE_PLACEHOLDER_RE.search(block)
-    ]
+    missing: list[str] = []
+    placeholders: list[str] = []
+    invalid_commit: list[str] = []
+    for key in APPROVAL_FIELD_KEYS:
+        block = _approval_field_block(text, key)
+        if block is None:
+            missing.append(key)
+            continue
+        if _is_placeholder_value(block):
+            placeholders.append(key)
+        if key == "Base Commit":
+            values = re.split(r"\s+/\s+", block.strip())
+            commit_value = values[-1]
+            if not _is_commit_legal(commit_value):
+                invalid_commit.append(commit_value)
     if missing:
-        report.add("5a. 批准记录字段", "FAIL", f"缺少：{'、'.join(missing)}")
-    elif placeholder_keys:
-        report.add(
-            "5a. 批准记录字段",
-            "FAIL",
-            f"字段仍为占位符：{'、'.join(placeholder_keys)}（不得残留 <...>）",
-        )
+        report.add("5a. 批准记录字段", "FAIL", f"缺少：{', '.join(missing)}")
+    elif placeholders:
+        report.add("5a. 批准记录字段", "FAIL", f"仍为占位符：{', '.join(placeholders)}")
+    elif invalid_commit:
+        report.add("5a. 批准记录字段", "FAIL", f"Base Commit 非法：{invalid_commit[0]}")
     else:
-        report.add("5a. 批准记录字段", "PASS", "Scope / Base Commit / Approver / Time 齐全且已落实")
+        report.add("5a. 批准记录字段", "PASS", "Scope / Base Commit / Approver / Time 齐全")
 
-    # 5b. 批准版本一致性：批准记录须引用目录 Task ID 与批准的 PLAN 版本
-    if not TASK_DIR_PATTERN.match(task_id):
-        report.add("5b. 批准版本一致", "WARN", "目录命名不符合 GD-YYYY-NNNN，跳过核对")
-        return
-    id_ok = re.search(rf"\b{re.escape(task_id)}\b", text) is not None
-    if plan_ver is None:
-        report.add("5b. 批准版本一致", "WARN", "目录内无 PLAN_vNN.md，跳过版本核对")
-        return
-    ver_ok = re.search(rf"\bv{plan_ver}\b", text) is not None
+    approval_task_id = _field_value(text, "Task ID")
+    id_ok = approval_task_id is not None and approval_task_id.strip() == task_id
+    ver_ok = plan_ver is not None and re.search(rf"\bv{plan_ver}\b", text)
     if id_ok and ver_ok:
-        report.add("5b. 批准版本一致", "PASS", f"批准记录引用 {task_id} / v{plan_ver}")
+        report.add("5b. 批准对象一致", "PASS", f"{task_id} / v{plan_ver}")
     else:
-        detail = []
+        details = []
         if not id_ok:
-            detail.append(f"未引用 Task ID {task_id}")
+            details.append(f"Task ID 不是 {task_id}")
         if not ver_ok:
-            detail.append(f"未引用批准版本 v{plan_ver}")
-        report.add("5b. 批准版本一致", "FAIL", "；".join(detail))
+            details.append(f"未锁定 Plan Version v{plan_ver or 'NN'}")
+        report.add("5b. 批准对象一致", "FAIL", "；".join(details))
 
 
 def check_execution_report(
-    directory: Path, report: Report, mode: str, plan_ver: str | None
+    directory: Path,
+    report: Report,
+    plan_ver: str | None,
+    l0: bool = False,
 ) -> None:
     path, count = _find_latest(directory, EXEC_REPORT_PATTERN)
     if path is None:
-        report.add(
-            "6. EXECUTION_REPORT_Axx.md", "FAIL", "缺少执行报告（附录 E，11 节，A01–A03）"
-        )
+        report.add("6. EXECUTION_REPORT_Axx.md", "FAIL", "缺少 A01-A03 执行报告")
         return
     text = _read(path)
-    missing = [s for s in EXEC_REPORT_SECTIONS if not _has_heading(text, s)]
+    missing = [section for section in EXEC_REPORT_SECTIONS if not _has_heading(text, section)]
     if missing:
         report.add(
             "6. EXECUTION_REPORT_Axx.md",
             "FAIL",
-            f"缺少 {len(missing)} 节：{'; '.join(missing)}",
+            f"缺少章节：{'; '.join(missing)}",
         )
     else:
         report.add(
-            "6. EXECUTION_REPORT_Axx.md", "PASS", _latest_detail(f"{path.name}，11 节齐全", count)
+            "6. EXECUTION_REPORT_Axx.md",
+            "PASS",
+            _latest_detail(f"{path.name}，11 节齐全", count),
         )
 
     conclusion_match = CONCLUSION_LINE_RE.search(text)
     if conclusion_match is None:
-        report.add(
-            "6a. 报告结论",
-            "FAIL",
-            "未找到整行 Conclusion 字段",
-        )
+        report.add("6a. 报告结论", "FAIL", "未找到整行 Conclusion")
     else:
-        conclusion = conclusion_match.group(1).strip()
-        if "/" in conclusion or "<" in conclusion:
-            report.add(
-                "6a. 报告结论",
-                "FAIL",
-                f"Conclusion 含未消除的选项（{conclusion}）：必须落实为单一枚举值",
-            )
+        conclusion = _normalize_value(conclusion_match.group(1))
+        if "/" in conclusion or _is_placeholder_value(conclusion):
+            report.add("6a. 报告结论", "FAIL", f"结论仍有占位或选项：{conclusion}")
         elif conclusion in CONCLUSION_ENUM:
             report.add("6a. 报告结论", "PASS", f"Conclusion: {conclusion}")
         else:
@@ -539,93 +596,74 @@ def check_execution_report(
                 "Conclusion 必须为 PASS / PASS WITH WARNINGS / FAIL / BLOCKED / NOT RUN",
             )
 
-    if not TASK_DIR_PATTERN.match(directory.name):
-        report.add(
-            "6b. Task ID 一致",
-            "WARN",
-            "目录命名不符合 GD-YYYY-NNNN，跳过一致性核对",
-        )
-    elif re.search(rf"\b{re.escape(directory.name)}\b", text):
-        report.add("6b. Task ID 一致", "PASS", "")
+    task_value = _field_value(text, "Task ID")
+    if task_value is not None and directory.name in task_value:
+        report.add("6b. Task ID 一致", "PASS", directory.name)
     else:
-        report.add("6b. Task ID 一致", "WARN", "执行报告未引用目录名，请人工核对")
+        report.add("6b. Task ID 一致", "FAIL", f"报告未引用目录 Task ID {directory.name}")
 
-    # 6c. 执行报告须引用批准的任务书版本（verifier / archive 模式）
-    if mode in ("verifier", "archive"):
-        if plan_ver is None:
-            report.add("6c. 版本引用一致", "WARN", "目录内无 PLAN_vNN.md，跳过版本核对")
-        elif re.search(rf"\bv{plan_ver}\b", text):
-            report.add("6c. 版本引用一致", "PASS", f"执行报告引用批准版本 v{plan_ver}")
-        else:
-            report.add(
-                "6c. 版本引用一致",
-                "FAIL",
-                f"执行报告未引用批准版本 v{plan_ver}（须在 Preflight 或 Metadata 写明）",
-            )
+    if plan_ver is None and l0:
+        report.add("6c. 版本引用一致", "PASS", "L0 快速通道无 PLAN，跳过版本引用")
+    elif plan_ver is None:
+        report.add("6c. 版本引用一致", "FAIL", "目录内无 PLAN_vNN.md")
+    elif re.search(rf"\bv{plan_ver}\b", text):
+        report.add("6c. 版本引用一致", "PASS", f"引用批准版本 v{plan_ver}")
+    else:
+        report.add("6c. 版本引用一致", "FAIL", f"未引用批准版本 v{plan_ver}")
 
 
 def check_acceptance(directory: Path, report: Report) -> None:
     path = directory / "ACCEPTANCE.md"
     if not path.is_file():
-        report.add("7. ACCEPTANCE.md", "FAIL", "缺少验收记录（用户决定）")
+        report.add("7. ACCEPTANCE.md", "FAIL", "缺少 CEO 验收记录")
         return
     text = _read(path)
     decision_match = ACCEPTANCE_DECISION_LINE_RE.search(text)
     if decision_match is None:
-        report.add(
-            "7. ACCEPTANCE.md",
-            "FAIL",
-            "未找到整行「用户决定 / Decision」字段",
-        )
+        report.add("7. ACCEPTANCE.md", "FAIL", "未找到整行用户决定/Decision")
     else:
-        decision = decision_match.group(1).strip()
-        if "/" in decision or "<" in decision:
-            report.add(
-                "7. ACCEPTANCE.md",
-                "FAIL",
-                f"决定含未消除的选项（{decision}）：必须落实为单一枚举值",
-            )
+        decision = _normalize_value(decision_match.group(1))
+        if "/" in decision or _is_placeholder_value(decision):
+            report.add("7. ACCEPTANCE.md", "FAIL", f"决定仍有占位或选项：{decision}")
         elif decision in ACCEPTANCE_DECISIONS:
-            report.add("7. ACCEPTANCE.md", "PASS", f"决定：{decision}")
+            report.add("7. ACCEPTANCE.md", "PASS", f"用户决定：{decision}")
         else:
             report.add(
                 "7. ACCEPTANCE.md",
                 "FAIL",
-                "必须为 ACCEPT / ACCEPT WITH FOLLOW-UP / REJECT 三者之一",
+                "必须为 ACCEPT / ACCEPT WITH FOLLOW-UP / REJECT",
             )
     if "AC-" in text:
         report.add("7a. 逐条验收", "PASS", "含 AC 条目映射")
     else:
-        report.add("7a. 逐条验收", "WARN", "未见 AC-xx 逐条结果，请人工确认逐条验收")
+        report.add("7a. 逐条验收", "WARN", "未检测到 AC-xx")
 
 
 def check_recon_report(directory: Path, report: Report) -> None:
     path = directory / "RECON_REPORT.md"
     if not path.is_file():
-        report.add("3. RECON_REPORT.md", "PASS", "未触发只读调查（可选项缺省）")
+        report.add("3. RECON_REPORT.md", "PASS", "未触发只读调查")
         return
     text = _read(path)
-    missing = [s for s in RECON_SECTIONS if not _has_heading(text, s)]
+    missing = [section for section in RECON_SECTIONS if not _has_heading(text, section)]
     if missing:
-        report.add(
-            "3. RECON_REPORT.md", "FAIL", f"缺少 {len(missing)} 节：{'; '.join(missing)}"
-        )
+        report.add("3. RECON_REPORT.md", "FAIL", f"缺少章节：{'; '.join(missing)}")
     else:
-        report.add("3. RECON_REPORT.md", "PASS", "7 节齐全（附录 F）")
+        report.add("3. RECON_REPORT.md", "PASS", "7 节齐全")
 
 
 def validate(task_dir: Path, mode: str, l0: bool = False) -> Report:
     report = Report(task_dir=str(task_dir), mode=mode, l0=l0)
-
+    if mode not in MODES:
+        report.add("校验模式", "FAIL", f"v3 仅支持 {'/'.join(MODES)}")
+        return report
     if not task_dir.is_dir():
         report.add("任务目录", "FAIL", f"{task_dir} 不存在")
         return report
-    if not TASK_DIR_PATTERN.match(task_dir.name):
-        report.add(
-            "任务目录命名", "FAIL", f"{task_dir.name} 不符合 GD-YYYY-NNNN 约定"
-        )
-    else:
+    if TASK_DIR_PATTERN.fullmatch(task_dir.name):
         report.add("任务目录命名", "PASS", task_dir.name)
+    else:
+        report.add("任务目录命名", "FAIL", f"{task_dir.name} 不符合 GD-YYYY-NNNN")
 
     plan_path, _ = _find_latest(task_dir, PLAN_FILE_PATTERN)
     plan_ver = (
@@ -635,118 +673,97 @@ def validate(task_dir: Path, mode: str, l0: bool = False) -> Report:
     )
 
     if l0:
-        # L0 快速通道：PLAN / APPROVAL_RECORD / CONTEXT_PACKET 均可省略；
-        # 存在则照常校验（PLAN 必须为 L0 级）。
         check_task_brief(task_dir, report, l0=True)
-        if any(
-            p.is_file() and CONTEXT_PACKET_PATTERN.match(p.name)
-            for p in task_dir.iterdir()
-        ):
-            check_context_packet(task_dir, report, mode)
-        if plan_path is not None:
-            check_plan_l0(task_dir, plan_path, report)
-        approval_path = task_dir / "APPROVAL_RECORD.md"
-        if approval_path.is_file():
+        check_plan_l0(task_dir, report)
+        approval = task_dir / "APPROVAL_RECORD.md"
+        if approval.is_file():
             check_approval_record(task_dir, report, task_dir.name, plan_ver)
-        if mode in ("verifier", "archive"):
-            check_execution_report(task_dir, report, mode, plan_ver)
+        if mode in {"watchdog", "archive"}:
+            check_execution_report(task_dir, report, plan_ver, l0=True)
         if mode == "archive":
             check_acceptance(task_dir, report)
         return report
 
     check_task_brief(task_dir, report)
-    check_context_packet(task_dir, report, mode)
+    check_context_manifest(task_dir, report, task_dir.name)
     check_recon_report(task_dir, report)
     check_plan(task_dir, report, mode, plan_ver)
-
-    if mode in ("executor", "verifier", "archive"):
+    if mode in {"worker", "watchdog", "archive"}:
         check_approval_record(task_dir, report, task_dir.name, plan_ver)
-    if mode in ("verifier", "archive"):
-        check_execution_report(task_dir, report, mode, plan_ver)
+    if mode in {"watchdog", "archive"}:
+        check_execution_report(task_dir, report, plan_ver)
     if mode == "archive":
         check_acceptance(task_dir, report)
-
     return report
 
 
 def list_required(mode: str, l0: bool = False) -> str:
     if l0:
-        per_mode = {
-            "planner": ["TASK_BRIEF.md（标准 10 段或 L0 三行 mini）"],
-            "executor": ["TASK_BRIEF.md（标准 10 段或 L0 三行 mini）"],
-            "verifier": [
-                "TASK_BRIEF.md（标准 10 段或 L0 三行 mini）",
-                "EXECUTION_REPORT_A0x.md",
-            ],
-            "archive": [
-                "TASK_BRIEF.md（标准 10 段或 L0 三行 mini）",
-                "EXECUTION_REPORT_A0x.md",
-                "ACCEPTANCE.md",
-            ],
+        mode_items = {
+            "planner": ["TASK_BRIEF.md（L0 mini 即可）"],
+            "worker": ["TASK_BRIEF.md（L0 mini 即可）"],
+            "watchdog": ["TASK_BRIEF.md", "EXECUTION_REPORT_A0x.md"],
+            "archive": ["TASK_BRIEF.md", "EXECUTION_REPORT_A0x.md", "ACCEPTANCE.md"],
         }
         lines = [
-            f"模式 {mode}（--l0 快速通道）必查件"
-            f"（目录 {TASK_DIR_PATTERN.pattern}；PLAN/APPROVAL_RECORD/CONTEXT_PACKET 可省略，"
-            "存在 PLAN 时其 Task Level 必须为 L0）："
+            f"模式 {mode}（v3 L0）：PLAN/APPROVAL_RECORD/FEED_DROP 可省略；"
+            "若存在 PLAN，任意非 L0 计划均失败。"
         ]
-        lines += [f"  - {name}" for name in per_mode[mode]]
+        lines.extend(f"  - {item}" for item in mode_items[mode])
         return "\n".join(lines)
-    per_mode = {
-        "planner": ["TASK_BRIEF.md", "CONTEXT_PACKET_vNN.md", "PLAN_vNN.md（DRAFT/NEED_INVESTIGATION）"],
-        "executor": [
-            "TASK_BRIEF.md",
-            "CONTEXT_PACKET_vNN.md",
-            "PLAN_vNN.md（Status: APPROVED）",
-            "APPROVAL_RECORD.md",
-        ],
-        "verifier": [
-            "TASK_BRIEF.md",
-            "CONTEXT_PACKET_vNN.md",
-            "PLAN_vNN.md（Status: APPROVED）",
-            "APPROVAL_RECORD.md",
-            "EXECUTION_REPORT_A0x.md",
-        ],
-        "archive": [
-            "TASK_BRIEF.md",
-            "CONTEXT_PACKET_vNN.md",
-            "PLAN_vNN.md（Status: APPROVED）",
-            "APPROVAL_RECORD.md",
+    common = [
+        "TASK_BRIEF.md",
+        "00_CONTEXT_MANIFEST.md",
+        "FEED_DROP/（非空且映射实体存在）",
+        "PLAN_vNN.md",
+    ]
+    mode_items = {
+        "planner": common,
+        "worker": common + ["APPROVAL_RECORD.md（PLAN 必须 APPROVED）"],
+        "watchdog": common
+        + ["APPROVAL_RECORD.md（PLAN 必须 APPROVED）", "EXECUTION_REPORT_A0x.md"],
+        "archive": common
+        + [
+            "APPROVAL_RECORD.md（PLAN 必须 APPROVED）",
             "EXECUTION_REPORT_A0x.md",
             "ACCEPTANCE.md",
         ],
     }
-    lines = [f"模式 {mode} 必查件（目录 {TASK_DIR_PATTERN.pattern}，RECON_REPORT.md 按需可选）："]
-    lines += [f"  - {name}" for name in per_mode[mode]]
+    lines = [f"模式 {mode} 必查件（目录 ^GD-\\d{{4}}-\\d{{4}}$；RECON_REPORT.md 按需）："]
+    lines.extend(f"  - {item}" for item in mode_items[mode])
     return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="统一交接包七件套结构校验器（v2.0 第 7 章 / 表 15）"
-    )
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="agent-workflow-kit v3 交接包结构校验器")
     parser.add_argument("task_dir", nargs="?", help="任务目录，如 AI_Context/TASKS/GD-2026-0001")
     parser.add_argument(
         "--for",
         dest="mode",
-        choices=MODES,
-        default="executor",
-        help="校验模式：planner 草案齐全 / executor 批准完整 / verifier 执行报告 / archive 归档齐全",
+        default="worker",
+        metavar="MODE",
+        help="planner|worker|watchdog|archive（默认 worker）",
     )
-    parser.add_argument(
-        "--l0",
-        action="store_true",
-        help="L0 快速通道：放行无 PLAN/APPROVAL_RECORD，CONTEXT_PACKET 可选；存在 PLAN 时必须为 L0 级",
-    )
+    parser.add_argument("--l0", action="store_true", help="L0 CEO 快速通道")
     parser.add_argument("--json", action="store_true", help="输出机器可读 JSON")
-    parser.add_argument("--list", action="store_true", help="列出当前模式的必查件后退出")
-    args = parser.parse_args(argv)
+    parser.add_argument("--list", action="store_true", help="列出当前模式必查件后退出")
+    return parser
 
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.mode not in MODES:
+        hint = LEGACY_MODE_HINTS.get(args.mode)
+        migration = f"；请改用 --for {hint}" if hint else ""
+        parser.error(
+            f"v3 模式仅支持 {'/'.join(MODES)}，收到 {args.mode}{migration}"
+        )
     if args.list:
         print(list_required(args.mode, args.l0))
         return 0
     if not args.task_dir:
-        parser.error("请提供任务目录，例如 AI_Context/TASKS/GD-2026-0001（或用 --list 查看必查件）")
-
+        parser.error("请提供任务目录，或使用 --list")
     report = validate(Path(args.task_dir), args.mode, args.l0)
     print(report.to_json() if args.json else report.render())
     return 0 if report.ok else 1
