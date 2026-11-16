@@ -19,6 +19,10 @@ htmlcov/
 **/*secret*
 **/*credential*
 
+# "Secretary" is a workflow role, not secret material.
+!skills/secretary-router/
+!skills/secretary-router/**
+
 # 本地临时目录与调试日志
 tmp/
 logs/

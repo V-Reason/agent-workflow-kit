@@ -85,3 +85,7 @@ v3 不再接受旧模式枚举；旧调用会收到迁移提示。
 - 任何任务若需越出批准文件、依赖、配置、资产或额度，必须停止并请求 CEO 决策。
 
 详细流程、常见问题和运维节奏见 [docs/USAGE.md](docs/USAGE.md)。
+
+## License
+
+本项目采用 [MIT License](LICENSE)。

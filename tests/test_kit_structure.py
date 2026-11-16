@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -44,6 +45,27 @@ class SkillLayoutTests(unittest.TestCase):
             match = re.search(r"^name:\s*([a-z0-9-]+)\s*$", text, re.MULTILINE)
             self.assertIsNotNone(match, skill)
             self.assertEqual(match.group(1), name)
+
+    def test_all_expected_skills_are_git_tracked(self) -> None:
+        result = subprocess.run(
+            ["git", "ls-files", "skills/*/SKILL.md"],
+            cwd=_ROOT,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        tracked = {
+            line.strip().replace("\\", "/")
+            for line in result.stdout.splitlines()
+            if line.strip()
+        }
+        expected = {
+            f"skills/{name}/SKILL.md"
+            for name in EXPECTED_SKILLS
+        }
+        self.assertEqual(tracked, expected)
 
     def test_advisors_are_planning_only(self) -> None:
         for name in ADVISOR_SKILLS:
