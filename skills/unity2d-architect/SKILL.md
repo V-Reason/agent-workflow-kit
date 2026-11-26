@@ -25,7 +25,7 @@ Assets/Tests/Editor/              GAMEDEV.Tests.Editor
 硬约束：
 
 1. `GAMEDEV.EditorTools` 只引用 `GAMEDEV.Core`。
-2. Editor 工具必须支持 `GAMEDEV.EditorTools.ProjectAuditWindow.RunBatchAudit` 无头入口和真实退出码。
+2. v4.0 工作流审计入口为 Unity 菜单 `Tools > Agent Workflow > Workflow Audit`；若项目另有 headless 入口，必须由 `AI_Context/BUILD_AND_TEST.md` 登记并真实运行。
 3. Runtime 与 Editor 目录物理隔离。
 4. 新增 asmdef、修改 references、ProjectSettings、Packages manifest 或渲染管线必须升风险并重新审批。
 
@@ -65,15 +65,13 @@ Assets/Tests/Editor/              GAMEDEV.Tests.Editor
 | V4 | 已登记的 CLI/无头入口优先；仅原生 UI 场景实跑时，由 CEO 或 Computer-Use 专项授权执行 |
 | V5 | Profiler、GC、DrawCall、内存、平台专项 |
 
-批处理审计命令必须引用 `AI_Context/BUILD_AND_TEST.md`，不得臆造：
+先运行离线装配检查：
 
-```text
-UnityEditor -batchmode -nographics -projectPath <root>
-  -executeMethod GAMEDEV.EditorTools.ProjectAuditWindow.RunBatchAudit
-  -logFile audit.log
+```bash
+python scripts/workflow.py doctor .
 ```
 
-`RunBatchAudit` 自己控制退出码，命令不得再追加 `-quit`。
+Unity 菜单审计与 Test Runner 默认是 `UNITY_GUI_REQUIRED`。任何 headless 审计命令都必须先引用项目 `AI_Context/BUILD_AND_TEST.md` 中已登记的入口，不得复用未安装的旧 `RunBatchAudit`。
 
 ## 七、输出格式
 

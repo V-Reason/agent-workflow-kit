@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import shutil
+import os
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
-_TEMPLATE = _ROOT / "templates" / "software-py"
 _TASK_ID = "GD-2026-0001"
 
 PLAN_HEADINGS = [
@@ -46,11 +46,15 @@ EXEC_HEADINGS = [
 
 
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    environment = os.environ.copy()
+    environment["PYTHONIOENCODING"] = "utf-8"
     return subprocess.run(
         command,
         cwd=cwd,
         text=True,
+        encoding="utf-8",
         capture_output=True,
+        env=environment,
         check=False,
     )
 
@@ -60,11 +64,21 @@ def _write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def _brief() -> str:
+def _profile_identity(project: Path) -> tuple[str, str]:
+    lock = tomllib.loads(
+        (project / "AI_Context" / "WORKFLOW_LOCK.toml").read_text(encoding="utf-8")
+    )
+    return " + ".join(lock["layer_versions"]), lock["profile_hash"]
+
+
+def _brief(project: Path) -> str:
+    profile, profile_hash = _profile_identity(project)
     return "\n".join(
         [
             "# TASK BRIEF",
-            "Workflow Version: v3.1",
+            "Workflow Version: v4.0",
+            f"Project Profile: {profile}",
+            f"Profile Hash: {profile_hash}",
             "1. Objective: 验证 FEED_DROP 集成",
             "2. Background: 临时演练",
             "3. Current Behavior: 无",
@@ -79,12 +93,15 @@ def _brief() -> str:
     )
 
 
-def _plan(status: str, base_commit: str) -> str:
+def _plan(status: str, base_commit: str, project: Path) -> str:
+    profile, profile_hash = _profile_identity(project)
     lines = [
         "# PLAN v01",
         f"Task ID: {_TASK_ID}",
         "Plan Version: v01",
-        "Workflow Version: v3.1",
+        "Workflow Version: v4.0",
+        f"Project Profile: {profile}",
+        f"Profile Hash: {profile_hash}",
         f"Status: {status}",
         "Task Level: L1 / Risk Level: R1",
         f"Branch / Base Commit: main / {base_commit}",
@@ -132,7 +149,7 @@ def _approval(commit: str) -> str:
     return (
         "# APPROVAL RECORD\n"
         f"Task ID / Approved Plan: {_TASK_ID} / v01\n"
-        "Workflow Version: v3.1\n"
+        "Workflow Version: v4.0\n"
         "Decision: APPROVED\n"
         "Approved Write Boundaries:\n"
         "- MODIFY src/app/**\n"
@@ -150,7 +167,7 @@ def _execution_report(task_id: str = _TASK_ID) -> str:
     lines = [
         "# EXECUTION REPORT A01",
         f"Task ID: {task_id} / Plan Version: v01 / Attempt: A01",
-        "Workflow Version: v3.1",
+        "Workflow Version: v4.0",
         "",
     ]
     for heading in EXEC_HEADINGS:
@@ -182,7 +199,7 @@ def _execution_report(task_id: str = _TASK_ID) -> str:
 def _acceptance() -> str:
     return (
         f"# ACCEPTANCE — {_TASK_ID}\n"
-        "Workflow Version: v3.1\n\n"
+        "Workflow Version: v4.0\n\n"
         "| AC | Class | Executor | Expected | Result | Primary Evidence |\n"
         "| --- | --- | --- | --- | --- | --- |\n"
         "| AC-01 | WORKER_AUTOMATABLE | WORKER | 交接通过 | PASS | TEST_RESULT+LOG |\n\n"
@@ -199,17 +216,22 @@ class TemplateIntegrationTests(unittest.TestCase):
     def test_python_template_full_and_l0_handover_rehearsal(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             project = Path(temp) / "software-py"
-            shutil.copytree(
-                _TEMPLATE,
-                project,
-                ignore=shutil.ignore_patterns(
-                    ".venv",
-                    "__pycache__",
-                    ".pytest_cache",
-                    ".mypy_cache",
-                    ".ruff_cache",
-                ),
+            create = _run(
+                [
+                    sys.executable,
+                    str(_ROOT / "scripts" / "workflow.py"),
+                    "create",
+                    str(project),
+                    "--layers",
+                    "core,generic,python,python-starter",
+                    "--name",
+                    "Python Rehearsal",
+                    "--yes",
+                    "--json",
+                ],
+                _ROOT,
             )
+            self.assertEqual(create.returncode, 0, create.stdout + create.stderr)
             self.assertEqual(_run(["git", "init", "-b", "main"], project).returncode, 0)
             _run(["git", "config", "user.name", "Temp CEO"], project)
             _run(["git", "config", "user.email", "temp-ceo@example.invalid"], project)
@@ -239,8 +261,8 @@ class TemplateIntegrationTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0)
             self.assertNotIn("FEED_DROP", status.stdout)
 
-            _write(task / "TASK_BRIEF.md", _brief())
-            _write(task / "PLAN_v01.md", _plan("DRAFT", base_commit))
+            _write(task / "TASK_BRIEF.md", _brief(project))
+            _write(task / "PLAN_v01.md", _plan("DRAFT", base_commit, project))
             planner = _run(
                 [
                     sys.executable,
@@ -253,7 +275,7 @@ class TemplateIntegrationTests(unittest.TestCase):
             )
             self.assertEqual(planner.returncode, 0, planner.stdout + planner.stderr)
 
-            _write(task / "PLAN_v01.md", _plan("APPROVED", base_commit))
+            _write(task / "PLAN_v01.md", _plan("APPROVED", base_commit, project))
             _write(task / "APPROVAL_RECORD.md", _approval(base_commit))
             worker = _run(
                 [
@@ -294,11 +316,14 @@ class TemplateIntegrationTests(unittest.TestCase):
             self.assertEqual(archive.returncode, 0, archive.stdout + archive.stderr)
 
             l0_task = project / "AI_Context" / "TASKS" / "GD-2026-0009"
+            profile, profile_hash = _profile_identity(project)
             _write(
                 l0_task / "TASK_BRIEF.md",
                 "# L0\n"
-                f"Task ID: GD-2026-0009 / Task Level: L0 / Workflow Version: v3.1 / "
+                f"Task ID: GD-2026-0009 / Task Level: L0 / Workflow Version: v4.0 / "
                 f"Base Commit: {base_commit}\n"
+                f"Project Profile: {profile}\n"
+                f"Profile Hash: {profile_hash}\n"
                 "目标与验收: WORKER_AUTOMATABLE / WORKER / TEST_RESULT / exit 0\n"
                 "文件边界: MODIFY `src/app/**`; FORBIDDEN `pyproject.toml`; "
                 "Computer-Use Authorization: NONE\n",
@@ -321,19 +346,35 @@ class TemplateIntegrationTests(unittest.TestCase):
             )
             self.assertEqual(l0_archive.returncode, 0, l0_archive.stdout + l0_archive.stderr)
 
-    def test_unity_template_v31_handover_structure(self) -> None:
+    def test_unity_template_v40_handover_structure(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             project = Path(temp) / "unity2d"
-            shutil.copytree(
-                _ROOT / "templates" / "unity2d",
-                project,
-                ignore=shutil.ignore_patterns(
-                    "Library",
-                    "Temp",
-                    "Logs",
-                    "__pycache__",
-                ),
+            (project / "Assets").mkdir(parents=True)
+            (project / "ProjectSettings").mkdir()
+            (project / "Packages").mkdir()
+            (project / "ProjectSettings" / "ProjectVersion.txt").write_text(
+                "m_EditorVersion: 2022.3.60f1\n", encoding="utf-8"
             )
+            (project / "Packages" / "manifest.json").write_text(
+                '{\n  "dependencies": {}\n}\n', encoding="utf-8"
+            )
+            create = _run(
+                [
+                    sys.executable,
+                    str(_ROOT / "scripts" / "workflow.py"),
+                    "create",
+                    str(project),
+                    "--layers",
+                    "core,generic,unity2d,unity2d-starter",
+                    "--name",
+                    "Unity Rehearsal",
+                    "--yes",
+                    "--accept-protected",
+                    "--json",
+                ],
+                _ROOT,
+            )
+            self.assertEqual(create.returncode, 0, create.stdout + create.stderr)
             self.assertEqual(_run(["git", "init", "-b", "main"], project).returncode, 0)
             _run(["git", "config", "user.name", "Temp CEO"], project)
             _run(["git", "config", "user.email", "temp-ceo@example.invalid"], project)
@@ -358,10 +399,10 @@ class TemplateIntegrationTests(unittest.TestCase):
             )
             self.assertEqual(stage.returncode, 0, stage.stderr)
 
-            plan = _plan("DRAFT", base_commit).replace(
+            plan = _plan("DRAFT", base_commit, project).replace(
                 "src/app/**", "Assets/Scripts/**"
             )
-            _write(task / "TASK_BRIEF.md", _brief())
+            _write(task / "TASK_BRIEF.md", _brief(project))
             _write(task / "PLAN_v01.md", plan)
             planner = _run(
                 [

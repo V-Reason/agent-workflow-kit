@@ -1,4 +1,4 @@
-"""Standard-library regression tests for the v3.1 kit scripts."""
+"""Standard-library regression tests for the v4.0 kit scripts."""
 
 from __future__ import annotations
 
@@ -49,12 +49,42 @@ class StageContextTestBase(unittest.TestCase):
         self._write("AI_Context/MODULE_MAP.md", "# Modules\n- app\n")
         self._write("AI_Context/PROJECT_BOARD.md", "# Board\n")
         self._write("AI_Context/DEPENDENCIES.md", "# Dependencies\n")
+        self._write(
+            "AI_Context/WORKFLOW_PROFILE.toml",
+            "\n".join(
+                [
+                    "schema_version = 1",
+                    'workflow_version = "v4.0"',
+                    'name = "Test Project"',
+                    'layers = ["core", "generic"]',
+                    "",
+                    "[parameters]",
+                    "",
+                ]
+            ),
+        )
+        self._write(
+            "AI_Context/WORKFLOW_LOCK.toml",
+            "\n".join(
+                [
+                    "schema_version = 1",
+                    'kit_version = "4.0.0"',
+                    'workflow_version = "v4.0"',
+                    'project_name = "Test Project"',
+                    'profile_hash = "sha256:' + ("a" * 64) + '"',
+                    'layers = ["core", "generic"]',
+                    'layer_versions = ["core@4.0.0", "generic@4.0.0"]',
+                    "",
+                ]
+            ),
+        )
 
     def run_stage(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(_STAGE), str(self.task_dir), *args],
             cwd=cwd or self.root,
             text=True,
+            encoding="utf-8",
             capture_output=True,
             check=False,
         )
@@ -70,6 +100,46 @@ class StageContextTestBase(unittest.TestCase):
 
 
 class StageContextTests(StageContextTestBase):
+    def test_manifest_records_project_profile_identity(self) -> None:
+        self._write(
+            "AI_Context/WORKFLOW_PROFILE.toml",
+            "\n".join(
+                [
+                    "schema_version = 1",
+                    'workflow_version = "v4.0"',
+                    'name = "Profile Project"',
+                    'layers = ["core", "generic"]',
+                    "",
+                    "[parameters]",
+                    "",
+                ]
+            ),
+        )
+        self._write(
+            "AI_Context/WORKFLOW_LOCK.toml",
+            "\n".join(
+                [
+                    "schema_version = 1",
+                    'kit_version = "4.0.0"',
+                    'workflow_version = "v4.0"',
+                    'project_name = "Profile Project"',
+                    'profile_hash = "sha256:' + ("a" * 64) + '"',
+                    'layers = ["core", "generic"]',
+                    'layer_versions = ["core@4.0.0", "generic@4.0.0"]',
+                    "",
+                ]
+            ),
+        )
+
+        result = self.run_stage()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        manifest = (self.task_dir / "00_CONTEXT_MANIFEST.md").read_text(encoding="utf-8")
+        self.assertIn("- Project Profile: core@4.0.0 + generic@4.0.0", manifest)
+        self.assertIn(
+            "- Profile Hash: sha256:" + ("a" * 64),
+            manifest,
+        )
+
     def test_flattens_fixed_layers_and_chat_safe_alias(self) -> None:
         self._write("Assets/Scripts/GameClock.cs", "public class GameClock {}\n")
         self._write("Assets/UI/Hud.uxml", "<ui />\n")
@@ -149,7 +219,7 @@ class StageContextTests(StageContextTestBase):
         manifest = (self.task_dir / "00_CONTEXT_MANIFEST.md").read_text(
             encoding="utf-8"
         )
-        self.assertIn("Workflow Version: v3.1", manifest)
+        self.assertIn("Workflow Version: v4.0", manifest)
         self.assertIn("Need Files Rounds: 1\n\n## Token Budget", manifest)
         self.assertIn("## NEED_FILES Round Index", manifest)
         self.assertIn("### ROUND_01", manifest)
@@ -168,6 +238,49 @@ class StageContextTests(StageContextTestBase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("reason", json.loads(result.stdout)["error"].lower())
         self.assertFalse((self.task_dir / "NEED_FILES").exists())
+
+    def test_append_rejects_profile_identity_drift(self) -> None:
+        self._write("src/one.py", "print('one')\n")
+        self._write("src/two.py", "print('two')\n")
+        self.assertEqual(self.run_stage("--files", "src/one.py").returncode, 0)
+        lock_path = self.root / "AI_Context" / "WORKFLOW_LOCK.toml"
+        lock_path.write_text(
+            lock_path.read_text(encoding="utf-8").replace(
+                "sha256:" + ("a" * 64),
+                "sha256:" + ("b" * 64),
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.run_stage(
+            "--append",
+            "--reason",
+            "profile drift",
+            "--files",
+            "src/two.py",
+            "--json",
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Profile", json.loads(result.stdout)["error"])
+        self.assertFalse((self.task_dir / "NEED_FILES").exists())
+
+    def test_baseline_rebuild_rejects_profile_identity_drift(self) -> None:
+        self._write("src/one.py", "print('one')\n")
+        self.assertEqual(self.run_stage("--files", "src/one.py").returncode, 0)
+        lock_path = self.root / "AI_Context" / "WORKFLOW_LOCK.toml"
+        lock_path.write_text(
+            lock_path.read_text(encoding="utf-8").replace(
+                "sha256:" + ("a" * 64),
+                "sha256:" + ("b" * 64),
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.run_stage("--files", "src/one.py", "--json")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Profile", json.loads(result.stdout)["error"])
 
     def test_reason_is_rejected_without_append(self) -> None:
         self._write("src/one.py", "print('one')\n")
@@ -243,7 +356,7 @@ class StageContextTests(StageContextTestBase):
         manifest_path = self.task_dir / "00_CONTEXT_MANIFEST.md"
         manifest_path.write_text(
             manifest_path.read_text(encoding="utf-8").replace(
-                "Workflow Version: v3.1", "Workflow Version: v3.0"
+                "Workflow Version: v4.0", "Workflow Version: v3.0"
             ),
             encoding="utf-8",
         )
@@ -258,7 +371,7 @@ class StageContextTests(StageContextTestBase):
         )
 
         self.assertEqual(result.returncode, 1)
-        self.assertIn("v3.1", json.loads(result.stdout)["error"])
+        self.assertIn("v4.0", json.loads(result.stdout)["error"])
 
     def test_append_rejects_round_number_gap(self) -> None:
         self._write("src/base.py", "base\n")
@@ -526,30 +639,6 @@ class StageContextTests(StageContextTestBase):
             self.assertFalse(json.loads(result.stdout)["ok"])
         finally:
             outside.unlink(missing_ok=True)
-
-
-class ScriptSyncTests(unittest.TestCase):
-    def _digest(self, path: Path) -> str:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
-
-    def test_template_script_copies_are_byte_identical(self) -> None:
-        pairs = [
-            (
-                _STAGE,
-                _ROOT / "templates" / "software-py" / "scripts" / "stage_context.py",
-                _ROOT / "templates" / "unity2d" / "scripts" / "stage_context.py",
-            ),
-            (
-                _VALIDATE,
-                _ROOT / "templates" / "software-py" / "scripts" / "validate_handover.py",
-                _ROOT / "templates" / "unity2d" / "scripts" / "validate_handover.py",
-            ),
-        ]
-        for source, py_copy, unity_copy in pairs:
-            expected = self._digest(source)
-            self.assertEqual(self._digest(py_copy), expected, py_copy)
-            self.assertEqual(self._digest(unity_copy), expected, unity_copy)
-
 
 if __name__ == "__main__":
     unittest.main()

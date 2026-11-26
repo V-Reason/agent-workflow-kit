@@ -1,0 +1,50 @@
+schema_version = 1
+id = "python-starter"
+version = "4.0.0"
+display_name = "Python Starter"
+description = "可选的 Python 四层架构 starter；只用于新项目"
+requires = ["python"]
+conflicts = []
+create_only = true
+required_paths = ["pyproject.toml", "src"]
+recommended_gates = ["uv sync", "uv run pytest"]
+
+[detection]
+all_paths = []
+any_paths = []
+
+[[actions]]
+type = "copy_tree"
+source = "kit:templates/software-py/src"
+target = "src"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_tree"
+source = "kit:templates/software-py/tests"
+target = "tests"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "kit:templates/software-py/pyproject.toml"
+target = "pyproject.toml"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "kit:templates/software-py/.editorconfig"
+target = ".editorconfig"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "kit:templates/software-py/.python-version"
+target = ".python-version"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "kit:templates/software-py/.env.example"
+target = ".env.example"
+ownership = "SEEDED"

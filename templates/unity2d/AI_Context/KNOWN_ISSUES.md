@@ -4,7 +4,7 @@
 
 | # | 日期 | 问题/决策 | 影响 | 状态 | 关联任务 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 2026-11-15 | ProjectAuditWindow 的命名检查只覆盖 Assets/Scripts 下的 .cs | 其他目录命名漂移不会告警 | OPEN | — |
+| 1 | 2026-11-26 | Workflow Audit 通过 Unity 菜单执行，属于 GUI 门禁 | 不能把观察或截图冒充 Worker 自动测试证据 | OPEN | — |
 | 2 | 2026-11-15 | BootstrapSceneMenu 使用 FindObjectOfType（2022.3 LTS 兼容） | 迁移 Unity 6 后建议换 FindFirstObjectByType 消除弃用告警 | OPEN | — |
 | <n> | <日期> | <问题描述> | <影响> | OPEN/CLOSED | GD-YYYY-NNNN |
 

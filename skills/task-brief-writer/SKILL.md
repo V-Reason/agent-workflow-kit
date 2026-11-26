@@ -1,6 +1,6 @@
 ---
 name: task-brief-writer
-description: v3.1 工程任务书撰写插件。供 Planner 产出 0.Metadata + 14 章、Write Boundaries/Forbidden、AC 分类与主证据、Computer-Use 授权、Test Plan 和 Worker/Watchdog 交接信息。只写计划，不写工程实现。
+description: v4.0 工程任务书撰写插件。供 Planner 产出 0.Metadata + 14 章、Write Boundaries/Forbidden、AC 分类与主证据、Computer-Use 授权、Test Plan 和 Worker/Watchdog 交接信息。只写计划，不写工程实现。
 ---
 
 # Role: 工程任务书撰写器
@@ -42,7 +42,9 @@ description: v3.1 工程任务书撰写插件。供 Planner 产出 0.Metadata + 
 - Worker: 模型 + Agent 模式 + 档位
 - Watchdog: 所需独立实例 / 模型 + 档位
 - Context: 00_CONTEXT_MANIFEST.md + Base Commit
-- Workflow Version: v3.1
+- Workflow Version: v4.0
+- Project Profile: 从 AI_Context/WORKFLOW_LOCK.toml 的 layer_versions 原样复制
+- Profile Hash: 从 AI_Context/WORKFLOW_LOCK.toml 原样复制
 - Computer-Use Authorization: NONE 或
   `AUTHORIZED: TARGET=<窗口/应用>; ACTIONS=<动作白名单>; SCOPE=<目录/场景范围>`
 - Execution Attempt Cap: A01–A03
@@ -154,10 +156,12 @@ Secretary 运行 `--append --reason ... --files ...`，自动创建下一个 `NE
 
 ## 六、L0 mini 任务书
 
-L0 不使用 14 章，但保留三行：
+L0 不使用 14 章，但保留紧凑 mini 结构：
 
 ```markdown
-Task ID: GD-YYYY-NNNN / Task Level: L0 / Workflow Version: v3.1 / Base Commit: <commit>
+Task ID: GD-YYYY-NNNN / Task Level: L0 / Workflow Version: v4.0 / Base Commit: <commit>
+Project Profile: core@4.0.0 + generic@4.0.0
+Profile Hash: sha256:<64 hex>
 目标与验收: <Class> / <Executor> / <Primary Evidence> / 一个可观察结果
 文件边界: MODIFY `<目录/模式>`; FORBIDDEN `<高危路径>`; Computer-Use Authorization: NONE
 ```
@@ -178,6 +182,7 @@ L0 如涉及公共接口、序列化、配置、资产删除、依赖或跨模�
 - [ ] 每个 AC 有 Class、Executor、Criterion 和合法 Primary Evidence。
 - [ ] GUI/Computer-Use 的默认执行人与专项授权无歧义。
 - [ ] Metadata 明示 Worker、Watchdog、Manifest 与尝试上限。
+- [ ] Project Profile 与 Profile Hash 已从项目 lock 原样复制。
 - [ ] 计划正文可单贴自足，不依赖对话记忆。
 - [ ] 不含模板占位符、未决伪选项或臆造命令。
 - [ ] `--for planner` 可验证的结构条件已满足。

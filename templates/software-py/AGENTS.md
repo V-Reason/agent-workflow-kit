@@ -1,6 +1,6 @@
 # AGENTS.md — <项目名> 项目级 Agent 规范（Python）
 
-> 本文件只写本项目特有约束；角色、状态机、模型路由与通用红线以 `agent-workflow-kit/AGENTS.md` v3.1 为准。
+> 本文件只写本项目特有约束；通用规则以 `AGENTS.md` 的 v4.0 托管块、`AI_Context/WORKFLOW_LOCK.toml` 与 `.agents/skills/` 为准。
 
 ## 0. 授权门
 
@@ -8,13 +8,14 @@
 - 写入必须落在批准 Write Boundaries；Forbidden、边界外、未批准删除/重命名立即停止。
 - Worker 可非敏感全仓只读检索，并在 Preflight 自动列出 Discovered Inputs 与 Planned Writes；清单不是逐文件审批闸门。
 - 未批准时只允许读仓、Preflight 和只读取材。
-- L0 可由 CEO 用三行 mini 简报直派 Worker，仍须 Diff 与验收记录。
+- L0 可由 CEO 用紧凑 mini 简报直派 Worker，仍须 Profile 身份、Diff 与验收记录。
 
 ## 1. 唯一正式入口
 
 - 任务目录：`AI_Context/TASKS/GD-YYYY-NNNN/`
 - 看板：`AI_Context/PROJECT_BOARD.md`
 - 上下文：`00_CONTEXT_MANIFEST.md` + `FEED_DROP/`
+- 项目装配与自检：`scripts/workflow.py`
 - 施工员：`worker-engine`
 - 独立监察：`watchdog-inspector`
 
@@ -58,7 +59,7 @@ uv run pytest
 | 删除 / 重命名 | 禁止 | 逐路径批准与回滚 |
 | `.env` / 密钥 / 凭据 | 永不读取或提交 | 使用 `.env.example` 占位 |
 | Git commit / merge / push | 禁止 | CEO 明确授权；禁止默认 push |
-| Unity/GUI/Computer-Use | 不适用 | Python 任务默认禁用；确有原生 UI 时按 v3.1 专项授权 |
+| Unity/GUI/Computer-Use | 不适用 | Python 任务默认禁用；确有原生 UI 时按 v4.0 专项授权 |
 
 ## 5. 技能装载
 

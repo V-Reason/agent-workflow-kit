@@ -3,7 +3,7 @@
 > 使用：Worker 每次尝试一份，改名 EXECUTION_REPORT_A01.md / A02 / A03；结论用语严格枚举。
 
 Task ID: GD-YYYY-NNNN / Plan Version: vNN / Attempt: A01
-Workflow Version: v3.1
+Workflow Version: v4.0
 Worker（模型与模式）: <模型 + agent/对话> / 思考档位: <low/medium/high/xhigh/不适用>
 执行时间: <YYYY-MM-DD HH:MM 时区> / 项目与引擎版本: <...> / 分支与 Base Commit: <...>
 

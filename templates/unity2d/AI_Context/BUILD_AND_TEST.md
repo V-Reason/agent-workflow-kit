@@ -13,22 +13,19 @@
 | 层 | 操作 | 期望 |
 | --- | --- | --- |
 | V0 | 审阅 PLAN、接口、生命周期与 Non-goals | 无未决阻塞 |
-| V1 | Unity 编译后的 Console + 结构审计 | 0 error，审计 FAIL = 0 |
+| V1 | `python scripts/workflow.py doctor .` + Unity Workflow Audit | 离线通过；Unity FAIL = 0 |
 | V2 | Assembly 编译 | 0 error |
 | V3 | Window > General > Test Runner > EditMode > Run All | 全绿；标 `UNITY_GUI_REQUIRED` |
 | V4 | 编辑器/运行时场景验证 | 观察点；截图/录屏仅在无法文本断言时使用 |
 | V5 | Profiler / Memory / DrawCall | 符合任务预算 |
 
-## 无头结构审计
+## 工作流审计
 
-```text
-<UnityEditorPath> -batchmode -nographics -projectPath <ProjectRoot> -executeMethod GAMEDEV.EditorTools.ProjectAuditWindow.RunBatchAudit -logFile audit.log
+```bash
+python scripts/workflow.py doctor .
 ```
 
-- 不要追加 `-quit`；`RunBatchAudit()` 通过 `EditorApplication.Exit` 返回真实退出码。
-- FAIL > 0 时退出码为 1，否则为 0。
-- 审计检查分层目录、asmdef、`AI_Context/PROJECT_BOARD.md`、`scripts/stage_context.py`、`scripts/validate_handover.py` 和脚本 `.meta`。
-- 运行前关闭同工程编辑器实例。
+再在 Unity 选择 `Tools > Agent Workflow > Workflow Audit`，Console 期望 `FAIL=0`。该菜单属于 `UNITY_GUI_REQUIRED`，默认由 CEO 执行。除非项目另有已登记且真跑通过的 headless 入口，不得把菜单审计描述成 CLI 证据。
 
 ## 上下文与交接
 
@@ -52,4 +49,4 @@ Unity Editor/游戏启动/Inspector 默认由 CEO 执行，Worker 仅在 Compute
 
 ---
 
-最后核验日期：2026-11-16｜分支：main｜维护人：<项目 Owner>
+最后核验日期：2026-11-26｜分支：main｜维护人：<项目 Owner>

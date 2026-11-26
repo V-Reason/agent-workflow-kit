@@ -1,4 +1,4 @@
-# README_AI — v3.1 Unity 项目上下文入口
+# README_AI — v4.0 Unity 项目上下文入口
 
 Secretary 准备基线，Planner 从 `FEED_DROP/` 与 `00_CONTEXT_MANIFEST.md` 开始分析，Worker 在批准 Write Boundaries 内自主发现和施工，Watchdog 独立跑编译、测试、审计和风险验证。
 
@@ -29,12 +29,12 @@ python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for watchdog
 | `ARCHITECTURE.md` | asmdef、生命周期和组合根 |
 | `MODULE_MAP.md` | 程序集、类、职责 |
 | `DEPENDENCIES.md` | Unity 包与插件 |
-| `BUILD_AND_TEST.md` | 编译、测试、RunBatchAudit、证据 |
+| `BUILD_AND_TEST.md` | 编译、测试、Workflow Audit、证据 |
 | `CODING_STANDARDS.md` | C#、GC、资源与资产规则 |
 | `KNOWN_ISSUES.md` | 引擎与资产风险 |
 | `DECISION_LOG.md` | 架构决策 |
 | `METRICS.md` | 六项运营指标 |
-| `TASKS/GD-YYYY-NNNN/` | v3.1 任务凭证 |
+| `TASKS/GD-YYYY-NNNN/` | v4.0 任务凭证 |
 
 ## 资产边界
 

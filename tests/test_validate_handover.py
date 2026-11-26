@@ -1,4 +1,4 @@
-"""Regression tests for the v3.1 handover validator."""
+"""Regression tests for the v4.0 handover validator."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ _SPEC.loader.exec_module(vh)
 TASK_ID = "GD-2026-0001"
 COMMIT_HASH = "b64326037c36ff8dce842d0496d4c0894532ae7c"
 SHA_A = "a" * 64
+PROFILE_HASH = "sha256:" + ("b" * 64)
 BASELINE_CONTENT = b"staged\n"
 BASELINE_HASH = hashlib.sha256(BASELINE_CONTENT).hexdigest()
 FEED_FILES = {
@@ -39,7 +40,9 @@ def make_plan(status: str = "APPROVED", version: str = "01", level: str = "L1") 
     body = f"""# PLAN v{version}
 Task ID: {TASK_ID}
 Plan Version: v{version}
-Workflow Version: v3.1
+Workflow Version: v4.0
+Project Profile: core@4.0.0 + generic@4.0.0
+Profile Hash: {PROFILE_HASH}
 Status: {status}
 Task Level: {level} / Risk Level: R1
 Branch / Base Commit: main / {COMMIT_HASH}
@@ -108,8 +111,10 @@ PENDING。
 def make_l0_brief() -> str:
     return (
         "# L0 任务\n"
-        "Task ID: GD-2026-0001 / Task Level: L0 / Workflow Version: v3.1 / "
+        "Task ID: GD-2026-0001 / Task Level: L0 / Workflow Version: v4.0 / "
         f"Base Commit: {COMMIT_HASH}\n"
+        "Project Profile: core@4.0.0 + generic@4.0.0\n"
+        f"Profile Hash: {PROFILE_HASH}\n"
         "目标与验收: WORKER_AUTOMATABLE / WORKER / TEST_RESULT / pytest exit 0\n"
         "文件边界: MODIFY `src/app/**`; FORBIDDEN `pyproject.toml`; "
         "Computer-Use Authorization: NONE\n"
@@ -120,7 +125,9 @@ def make_brief() -> str:
     return "\n".join(
         [
             "# TASK BRIEF",
-            "Workflow Version: v3.1",
+            "Workflow Version: v4.0",
+            "Project Profile: core@4.0.0 + generic@4.0.0",
+            f"Profile Hash: {PROFILE_HASH}",
             "1. Objective: 导出 CSV",
             "2. Background: 用户需要",
             "3. Current Behavior: 无导出",
@@ -142,10 +149,11 @@ def layer_from_name(name: str) -> str:
 def make_manifest(
     commit: str = COMMIT_HASH,
     *,
-    workflow_version: str = "v3.1",
+    workflow_version: str = "v4.0",
     round_count: int = 0,
     round_section: str = "",
     extra_rows: list[tuple[str, str, str, int]] | None = None,
+    profile_hash: str = PROFILE_HASH,
 ) -> str:
     rows = [
         (staged, layer_from_name(staged), source, 1)
@@ -160,6 +168,8 @@ def make_manifest(
     return (
         f"# 00 CONTEXT MANIFEST — {TASK_ID}\n\n"
         f"- Workflow Version: {workflow_version}\n"
+        "- Project Profile: core@4.0.0 + generic@4.0.0\n"
+        f"- Profile Hash: {profile_hash}\n"
         f"- Task ID: {TASK_ID}\n"
         f"- Base Commit: {commit}\n"
         "- Baseline Generated At: 2026-11-16T12:00:00+08:00\n"
@@ -198,7 +208,7 @@ def make_approval(version: str = "01", decision: str = "APPROVED") -> str:
         "# APPROVAL RECORD\n"
         f"Task ID: {TASK_ID}\n"
         f"Approved Plan: v{version}\n"
-        "Workflow Version: v3.1\n"
+        "Workflow Version: v4.0\n"
         f"Decision: {decision}\n"
         "Approved Write Boundaries:\n"
         "- MODIFY src/app/**\n"
@@ -222,7 +232,7 @@ def make_exec_report(
     lines = [
         f"# EXECUTION REPORT A{attempt}",
         f"Task ID: {task_id} / Plan Version: v{version} / Attempt: A{attempt}",
-        "Workflow Version: v3.1",
+        "Workflow Version: v4.0",
         "",
     ]
     for heading in vh.EXEC_REPORT_SECTIONS:
@@ -254,7 +264,7 @@ def make_exec_report(
 def make_acceptance(decision: str = "ACCEPT") -> str:
     return (
         f"# ACCEPTANCE — {TASK_ID}\n"
-        "Workflow Version: v3.1\n\n"
+        "Workflow Version: v4.0\n\n"
         "| AC | Class | Executor | Expected | Result | Primary Evidence |\n"
         "| --- | --- | --- | --- | --- | --- |\n"
         "| AC-01 | WORKER_AUTOMATABLE | WORKER | 导出可用 | PASS | TEST_RESULT+LOG |\n\n"
@@ -295,6 +305,36 @@ class ValidatorTestBase(unittest.TestCase):
                     target.write_bytes(content)
                 else:
                     target.write_text(content, encoding="utf-8")
+            context = task_dir.parent / "AI_Context"
+            context.mkdir()
+            (context / "WORKFLOW_PROFILE.toml").write_text(
+                "\n".join(
+                    [
+                        "schema_version = 1",
+                        'workflow_version = "v4.0"',
+                        'name = "Test Project"',
+                        'layers = ["core", "generic"]',
+                        "[parameters]",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (context / "WORKFLOW_LOCK.toml").write_text(
+                "\n".join(
+                    [
+                        "schema_version = 1",
+                        'kit_version = "4.0.0"',
+                        'workflow_version = "v4.0"',
+                        'project_name = "Test Project"',
+                        f'profile_hash = "{PROFILE_HASH}"',
+                        'layers = ["core", "generic"]',
+                        'layer_versions = ["core@4.0.0", "generic@4.0.0"]',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
             return vh.validate(task_dir, mode, l0)
 
     def status_of(self, report: vh.Report, item_prefix: str) -> vh.CheckResult:
@@ -342,7 +382,42 @@ class TestLatestVersionSelection(ValidatorTestBase):
 
 
 class TestContextManifest(ValidatorTestBase):
-    def test_manifest_requires_v31_workflow_version(self) -> None:
+    def test_task_brief_profile_hash_must_match_lock(self) -> None:
+        files = self.base_files(status="DRAFT")
+        files["TASK_BRIEF.md"] = make_brief().replace(
+            PROFILE_HASH,
+            "sha256:" + ("d" * 64),
+        )
+
+        report = self.run_validate(files, "planner")
+
+        self.assertFalse(report.ok)
+        self.assertIn("1b. Profile Identity", report.render())
+
+    def test_plan_profile_hash_must_match_lock(self) -> None:
+        files = self.base_files(status="DRAFT")
+        files["PLAN_v01.md"] = make_plan(status="DRAFT").replace(
+            PROFILE_HASH,
+            "sha256:" + ("e" * 64),
+        )
+
+        report = self.run_validate(files, "planner")
+
+        self.assertFalse(report.ok)
+        self.assertIn("4k. Profile Identity", report.render())
+
+    def test_profile_hash_must_match_workflow_lock(self) -> None:
+        files = self.base_files(status="DRAFT")
+        files["00_CONTEXT_MANIFEST.md"] = make_manifest(
+            profile_hash="sha256:" + ("c" * 64)
+        )
+
+        report = self.run_validate(files, "planner")
+
+        self.assertFalse(report.ok)
+        self.assertIn("Profile Hash", report.render())
+
+    def test_manifest_requires_v40_workflow_version(self) -> None:
         files = self.base_files(status="DRAFT")
         files["00_CONTEXT_MANIFEST.md"] = make_manifest(workflow_version="v3.0")
 
@@ -639,11 +714,11 @@ class TestCommitAndDecisionForms(ValidatorTestBase):
         self.assertEqual(self.status_of(report, "5. APPROVAL").status, "FAIL")
 
 
-class TestV31TaskContracts(ValidatorTestBase):
+class TestV40TaskContracts(ValidatorTestBase):
     def test_task_brief_requires_workflow_version(self) -> None:
         files = self.base_files()
         files["TASK_BRIEF.md"] = make_brief().replace(
-            "Workflow Version: v3.1\n", ""
+            "Workflow Version: v4.0\n", ""
         )
         files["APPROVAL_RECORD.md"] = make_approval()
 
@@ -654,7 +729,7 @@ class TestV31TaskContracts(ValidatorTestBase):
 
     def test_plan_requires_workflow_version(self) -> None:
         files = self.base_files()
-        files["PLAN_v01.md"] = make_plan().replace("Workflow Version: v3.1\n", "")
+        files["PLAN_v01.md"] = make_plan().replace("Workflow Version: v4.0\n", "")
         files["APPROVAL_RECORD.md"] = make_approval()
 
         report = self.run_validate(files, "worker")
@@ -801,7 +876,7 @@ class TestV31TaskContracts(ValidatorTestBase):
         self.assertIn("Computer-Use", report.render())
 
 
-class TestV31EvidenceContracts(ValidatorTestBase):
+class TestV40EvidenceContracts(ValidatorTestBase):
     def test_execution_report_ac_set_must_match_plan(self) -> None:
         files = self.base_files()
         files["APPROVAL_RECORD.md"] = make_approval()
@@ -965,7 +1040,7 @@ class TestL0FastTrack(ValidatorTestBase):
         report = self.run_validate({}, "worker", l0=True, feed_names=set())
         self.assertFalse(report.ok)
 
-    def test_l0_requires_v31_execution_and_evidence_contract(self) -> None:
+    def test_l0_requires_v40_execution_and_evidence_contract(self) -> None:
         brief = (
             "# L0 任务\n"
             "Task Level: L0\n"
@@ -1049,7 +1124,7 @@ class TestCliContract(unittest.TestCase):
         for check in payload["checks"]:
             self.assertEqual(set(check), {"item", "status", "detail"})
 
-    def test_list_supports_v3_modes(self) -> None:
+    def test_list_supports_v4_modes(self) -> None:
         for mode in ("planner", "worker", "watchdog", "archive"):
             self.assertEqual(vh.main(["--list", "--for", mode]), 0)
 
@@ -1063,6 +1138,7 @@ class TestCliContract(unittest.TestCase):
                 "exec" + "utor",
             ],
             text=True,
+            encoding="utf-8",
             capture_output=True,
             check=False,
         )
@@ -1070,7 +1146,7 @@ class TestCliContract(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         message = result.stderr + result.stdout
         self.assertIn("worker", message)
-        self.assertIn("v3", message.lower())
+        self.assertIn("v4", message.lower())
 
     def test_missing_directory_exit_code_is_one(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1092,6 +1168,22 @@ class TestAutomaticDiffAudit(unittest.TestCase):
             "AI_Context/ARCHITECTURE.md": "# Architecture\n",
             "AI_Context/MODULE_MAP.md": "# Modules\n",
             "AI_Context/DEPENDENCIES.md": "# Dependencies\n",
+            "AI_Context/WORKFLOW_PROFILE.toml": (
+                "schema_version = 1\n"
+                'workflow_version = "v4.0"\n'
+                'name = "Test Project"\n'
+                'layers = ["core", "generic"]\n'
+                "[parameters]\n"
+            ),
+            "AI_Context/WORKFLOW_LOCK.toml": (
+                "schema_version = 1\n"
+                'kit_version = "4.0.0"\n'
+                'workflow_version = "v4.0"\n'
+                'project_name = "Test Project"\n'
+                f'profile_hash = "{PROFILE_HASH}"\n'
+                'layers = ["core", "generic"]\n'
+                'layer_versions = ["core@4.0.0", "generic@4.0.0"]\n'
+            ),
             "src/app/feature.py": "VALUE = 1\n",
             "pyproject.toml": "[project]\nname = 'demo'\n",
             "README.md": "# Demo\n",

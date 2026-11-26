@@ -1,4 +1,4 @@
-# README_AI — v3.1 项目上下文入口
+# README_AI — v4.0 项目上下文入口
 
 Secretary 准备基线，Planner 从 `FEED_DROP/` 与 `00_CONTEXT_MANIFEST.md` 开始分析，Worker 在批准 Write Boundaries 内自主发现和施工，Watchdog 独立验证。`AI_Context/` 是所有角色的持久化事实源。
 

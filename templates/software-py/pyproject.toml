@@ -1,7 +1,7 @@
 [project]
 name = "app"
 version = "0.1.0"
-description = "通用软件项目骨架（Agent 工作流 v3.1 配套模板）：src 四层架构 + uv + ruff + mypy + pytest"
+description = "通用软件项目骨架（Agent 工作流 v4.0 配套模板）：src 四层架构 + uv + ruff + mypy + pytest"
 requires-python = ">=3.12"
 dependencies = []
 

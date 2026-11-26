@@ -3,7 +3,9 @@
 > 使用：复制本文件到 `AI_Context/TASKS/GD-YYYY-NNNN/TASK_BRIEF.md`，逐段填写；<> 为占位。
 
 Task ID: GD-YYYY-NNNN
-Workflow Version: v3.1
+Workflow Version: v4.0
+Project Profile: <从 AI_Context/WORKFLOW_LOCK.toml 的 layer_versions 复制>
+Profile Hash: <从 AI_Context/WORKFLOW_LOCK.toml 复制 sha256:...>
 Project / Engine / Tool Version: <项目名 / Python 3.12 / uv>
 
 Task Level: L0-L3（初判）    Risk Level: R0-R3（初判）

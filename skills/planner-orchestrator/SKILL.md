@@ -1,6 +1,6 @@
 ---
 name: planner-orchestrator
-description: v3.1 架构大脑 Planner。消费 FEED_DROP/NEED_FILES 与 Manifest，Agent 模式默认全仓只读检索；负责需求澄清、任务分级、写入边界、AC 分类、证据设计、风险与 14 章 PLAN 草案。只规划不实施，不批准自己的计划。
+description: v4.0 架构大脑 Planner。消费 FEED_DROP/NEED_FILES 与 Manifest，Agent 模式默认全仓只读检索；负责需求澄清、任务分级、写入边界、AC 分类、证据设计、风险与 14 章 PLAN 草案。只规划不实施，不批准自己的计划。
 ---
 
 # Role: Planner 架构大脑
@@ -13,6 +13,7 @@ description: v3.1 架构大脑 Planner。消费 FEED_DROP/NEED_FILES 与 Manifes
 
 - `TASK_BRIEF.md`
 - `FEED_DROP/` 与 `00_CONTEXT_MANIFEST.md`
+- `AI_Context/WORKFLOW_LOCK.toml` 的 Project Profile 身份
 - 项目 `AGENTS.md`、架构、模块地图、依赖与构建测试资料
 - 当前任务的只读仓库检索结果
 
@@ -107,14 +108,15 @@ L2 建议 `xhigh`；R2+ 加独立审查与分阶段门禁。模型与价格只�
 
 1. Planner 草案发 CEO 审阅。
 2. 批准后核对批准版本、Task ID、Write Boundaries、Forbidden、Computer-Use 授权、条件、Base Commit。
-3. 由 CEO/Secretary 运行：
+3. TASK_BRIEF 与 PLAN 中的 Project Profile / Profile Hash 必须与项目 lock 完全一致。
+4. 由 CEO/Secretary 运行：
 
 ```bash
 python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for worker
 ```
 
-4. 只把批准 PLAN、批准记录、Manifest 与项目根交 Worker。
-5. Worker 开工前先回报读取版本、范围与 Preflight，不能跳过。
+5. 只把批准 PLAN、批准记录、Manifest 与项目根交 Worker。
+6. Worker 开工前先回报读取版本、范围与 Preflight，不能跳过。
 
 ## 八、执行审查与重规划
 

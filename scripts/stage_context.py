@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage v3.1 FEED_DROP baselines and append-only NEED_FILES rounds."""
+"""Stage v4.0 FEED_DROP baselines and append-only NEED_FILES rounds."""
 
 from __future__ import annotations
 
@@ -13,13 +13,19 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+for _stream in (sys.stdout, sys.stderr):
+    _reconfigure = getattr(_stream, "reconfigure", None)
+    if _reconfigure is not None:
+        _reconfigure(encoding="utf-8")
+
 TASK_DIR_PATTERN = re.compile(r"^GD-\d{4}-\d{4}$")
 ROUND_DIR_PATTERN = re.compile(r"^ROUND_(\d{2})$")
-WORKFLOW_VERSION = "v3.1"
+WORKFLOW_VERSION = "v4.0"
 MANIFEST_ENTRY_RE = re.compile(
     r"^\|\s*`(?P<staged>[^`]+)`\s*\|\s*(?P<layer>L[123])\s*\|"
     r"\s*`(?P<source>[^`]+)`\s*\|\s*(?P<tokens>\d+)\s*\|"
@@ -234,7 +240,7 @@ def _manifest_entries(manifest: Path) -> list[ManifestEntry]:
     return entries
 
 
-def _require_v31_manifest(manifest: Path) -> str:
+def _require_current_manifest(manifest: Path) -> str:
     if not manifest.is_file():
         raise StageError("--append 要求现有的 00_CONTEXT_MANIFEST.md")
     text = manifest.read_text(encoding="utf-8")
@@ -242,7 +248,7 @@ def _require_v31_manifest(manifest: Path) -> str:
     if version_match is None or version_match.group(1) != WORKFLOW_VERSION:
         raise StageError(
             f"--append 要求 Workflow Version {WORKFLOW_VERSION} 的任务清单；"
-            "v3.0 任务包必须按迁移说明重建"
+            "v4.0 任务包必须按迁移说明重建"
         )
     return text
 
@@ -300,6 +306,68 @@ def _manifest_base_commit(text: str) -> str:
     if match is None or not match.group(1).strip():
         raise StageError("现有 Manifest 缺少 Base Commit")
     return match.group(1).strip()
+
+
+def _manifest_field(text: str, key: str) -> str:
+    match = re.search(
+        rf"^- {re.escape(key)}:\s*(.+?)\s*$",
+        text,
+        re.MULTILINE,
+    )
+    if match is None or not match.group(1).strip():
+        raise StageError(f"现有 Manifest 缺少 {key}")
+    return match.group(1).strip()
+
+
+def _assert_manifest_profile(
+    manifest_text: str,
+    project_profile: str,
+    profile_hash: str,
+) -> None:
+    if _manifest_field(manifest_text, "Project Profile") != project_profile:
+        raise StageError(
+            "Project Profile 已变化；禁止跨 profile 漂移，请创建新的 v4.0 任务"
+        )
+    if _manifest_field(manifest_text, "Profile Hash") != profile_hash:
+        raise StageError(
+            "Profile Hash 已变化；禁止跨 profile 漂移，请创建新的 v4.0 任务"
+        )
+
+
+def _profile_identity(root: Path) -> tuple[str, str]:
+    profile_path = root / "AI_Context" / "WORKFLOW_PROFILE.toml"
+    lock_path = root / "AI_Context" / "WORKFLOW_LOCK.toml"
+    if not profile_path.is_file() or not lock_path.is_file():
+        raise StageError(
+            "v4.0 任务要求 AI_Context/WORKFLOW_PROFILE.toml 与 "
+            "AI_Context/WORKFLOW_LOCK.toml；请先用 scripts/workflow.py 装配项目"
+        )
+    try:
+        profile = tomllib.loads(profile_path.read_text(encoding="utf-8"))
+        lock = tomllib.loads(lock_path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise StageError(f"读取 workflow profile/lock 失败：{exc}") from exc
+    if profile.get("workflow_version") != WORKFLOW_VERSION:
+        raise StageError(
+            f"WORKFLOW_PROFILE.toml 必须声明 workflow_version = {WORKFLOW_VERSION}"
+        )
+    if lock.get("workflow_version") != WORKFLOW_VERSION:
+        raise StageError(
+            f"WORKFLOW_LOCK.toml 必须声明 workflow_version = {WORKFLOW_VERSION}"
+        )
+    profile_hash = lock.get("profile_hash")
+    if not isinstance(profile_hash, str) or not re.fullmatch(
+        r"sha256:[0-9a-f]{64}", profile_hash
+    ):
+        raise StageError("WORKFLOW_LOCK.toml 缺少合法 profile_hash")
+    layer_versions = lock.get("layer_versions")
+    if (
+        not isinstance(layer_versions, list)
+        or not layer_versions
+        or not all(isinstance(item, str) and "@" in item for item in layer_versions)
+    ):
+        raise StageError("WORKFLOW_LOCK.toml 缺少合法 layer_versions")
+    return " + ".join(layer_versions), profile_hash
 
 
 def _run_git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -403,6 +471,8 @@ def _manifest_text(
     totals: dict[str, int],
     budget_limit: int,
     warnings: list[str],
+    project_profile: str,
+    profile_hash: str,
 ) -> str:
     tree, truncated = _project_tree(root)
     l1_status = (
@@ -414,6 +484,8 @@ def _manifest_text(
         f"# 00 CONTEXT MANIFEST — {task_id}",
         "",
         f"- Workflow Version: {WORKFLOW_VERSION}",
+        f"- Project Profile: {project_profile}",
+        f"- Profile Hash: {profile_hash}",
         f"- Task ID: {task_id}",
         f"- Base Commit: {base_commit}",
         f"- Baseline Generated At: {generated_at}",
@@ -507,10 +579,14 @@ def _round_manifest_text(
     source_commit: str,
     chat_safe: bool,
     files: list[StagedFile],
+    project_profile: str,
+    profile_hash: str,
 ) -> str:
     lines = [
         f"# NEED_FILES ROUND_{round_number:02d} — {task_id}\n\n"
         f"- Workflow Version: {WORKFLOW_VERSION}\n"
+        f"- Project Profile: {project_profile}\n"
+        f"- Profile Hash: {profile_hash}\n"
         f"- Task ID: {task_id}\n"
         f"- Created At: {created_at}\n"
         f"- Reason: {reason}\n"
@@ -616,7 +692,9 @@ def _stage_round(
     if not reason_value:
         raise StageError("--append 必须用 --reason 说明本轮直接解决的未知项")
     manifest_path = task_dir / "00_CONTEXT_MANIFEST.md"
-    existing_manifest = _require_v31_manifest(manifest_path)
+    project_profile, profile_hash = _profile_identity(root)
+    existing_manifest = _require_current_manifest(manifest_path)
+    _assert_manifest_profile(existing_manifest, project_profile, profile_hash)
     base_commit = _manifest_base_commit(existing_manifest)
     feed_drop = task_dir / "FEED_DROP"
     if not feed_drop.is_dir() or not any(path.is_file() for path in feed_drop.iterdir()):
@@ -699,6 +777,8 @@ def _stage_round(
             source_commit=source_commit,
             chat_safe=chat_safe,
             files=staged_files,
+            project_profile=project_profile,
+            profile_hash=profile_hash,
         )
         (temporary_round / "ROUND_MANIFEST.md").write_text(
             round_manifest, encoding="utf-8"
@@ -790,6 +870,7 @@ def stage(
         raise StageError("--reason 只能配合 --append 使用")
     task_input = Path(task_dir_arg)
     root = _find_project_root(task_input)
+    project_profile, profile_hash = _profile_identity(root)
     task_dir = _validate_task_dir(task_input, root)
     task_dir.mkdir(parents=True, exist_ok=True)
     if append:
@@ -803,6 +884,13 @@ def stage(
             budget_limit=budget_limit,
         )
     manifest_path = task_dir / "00_CONTEXT_MANIFEST.md"
+    if manifest_path.is_file():
+        _manifest_round_count(manifest_path)
+        _assert_manifest_profile(
+            manifest_path.read_text(encoding="utf-8"),
+            project_profile,
+            profile_hash,
+        )
     manifest_rounds = (
         _manifest_round_count(manifest_path) if manifest_path.is_file() else 0
     )
@@ -911,6 +999,8 @@ def stage(
             totals=totals,
             budget_limit=budget_limit,
             warnings=warnings,
+            project_profile=project_profile,
+            profile_hash=profile_hash,
         )
 
         if feed_drop.exists():
@@ -961,7 +1051,7 @@ def _non_negative_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="生成 v3.1 FEED_DROP 基线与 append-only NEED_FILES 补料轮"
+        description="生成 v4.0 FEED_DROP 基线与 append-only NEED_FILES 补料轮"
     )
     parser.add_argument("task_dir", help="任务目录，如 AI_Context/TASKS/GD-2026-0001")
     parser.add_argument("--files", nargs="+", default=[], help="相对项目根加入的 L3 源文件")

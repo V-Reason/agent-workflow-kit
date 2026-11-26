@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""validate_handover.py - v3.1 handover, evidence and Git-scope validator."""
+"""validate_handover.py - v4.0 handover, evidence and Git-scope validator."""
 
 from __future__ import annotations
 
@@ -10,11 +10,17 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 
+for _stream in (sys.stdout, sys.stderr):
+    _reconfigure = getattr(_stream, "reconfigure", None)
+    if _reconfigure is not None:
+        _reconfigure(encoding="utf-8")
+
 TASK_DIR_PATTERN = re.compile(r"^GD-\d{4}-\d{4}$")
-WORKFLOW_VERSION = "v3.1"
+WORKFLOW_VERSION = "v4.0"
 PLAN_FILE_PATTERN = re.compile(r"^PLAN_v(\d{2})\.md$")
 EXEC_REPORT_PATTERN = re.compile(r"^EXECUTION_REPORT_A0([1-3])\.md$")
 ROUND_DIR_PATTERN = re.compile(r"^ROUND_(\d{2})$")
@@ -637,6 +643,82 @@ def _field_value(text: str, key: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _project_root_for_task(directory: Path) -> Path | None:
+    for candidate in (directory, *directory.parents):
+        if (candidate / "AI_Context" / "WORKFLOW_LOCK.toml").is_file():
+            return candidate
+    return None
+
+
+def _load_profile_identity(directory: Path) -> tuple[str, str] | None:
+    root = _project_root_for_task(directory)
+    if root is None:
+        return None
+    profile_path = root / "AI_Context" / "WORKFLOW_PROFILE.toml"
+    lock_path = root / "AI_Context" / "WORKFLOW_LOCK.toml"
+    try:
+        profile = tomllib.loads(profile_path.read_text(encoding="utf-8"))
+        lock = tomllib.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return None
+    if (
+        profile.get("workflow_version") != WORKFLOW_VERSION
+        or lock.get("workflow_version") != WORKFLOW_VERSION
+    ):
+        return None
+    profile_hash = lock.get("profile_hash")
+    layer_versions = lock.get("layer_versions")
+    if (
+        not isinstance(profile_hash, str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", profile_hash) is None
+        or not isinstance(layer_versions, list)
+        or not layer_versions
+        or not all(isinstance(item, str) and "@" in item for item in layer_versions)
+    ):
+        return None
+    return " + ".join(layer_versions), profile_hash
+
+
+def _check_profile_identity_text(
+    directory: Path,
+    text: str,
+    report: Report,
+    prefix: str,
+) -> None:
+    expected = _load_profile_identity(directory)
+    if expected is None:
+        report.add(f"{prefix}. Profile Identity", "FAIL", "缺少合法 v4.0 Profile Lock")
+        return
+    profile_value = (_field_value(text, "Project Profile") or "").strip()
+    hash_value = (_field_value(text, "Profile Hash") or "").strip()
+    expected_profile, expected_hash = expected
+    failures: list[str] = []
+    if profile_value != expected_profile:
+        failures.append(
+            f"Project Profile={profile_value or '缺失'}，期望 {expected_profile}"
+        )
+    if hash_value != expected_hash:
+        failures.append(
+            f"Profile Hash={hash_value or '缺失'}，期望 {expected_hash}"
+        )
+    if failures:
+        report.add(f"{prefix}. Profile Identity", "FAIL", "；".join(failures))
+    else:
+        report.add(f"{prefix}. Profile Identity", "PASS", expected_profile)
+
+
+def check_project_profile(directory: Path, report: Report) -> None:
+    identity = _load_profile_identity(directory)
+    if identity is None:
+        report.add(
+            "0. Project Profile",
+            "FAIL",
+            "项目缺少 Workflow v4.0 WORKFLOW_PROFILE.toml / WORKFLOW_LOCK.toml",
+        )
+    else:
+        report.add("0. Project Profile", "PASS", identity[0])
+
+
 def _approval_field_block(text: str, key: str) -> str | None:
     match = re.search(
         rf"^[^\n]*?{re.escape(key)}[:：][ \t]*([^\n]*)$",
@@ -671,6 +753,7 @@ def check_task_brief(directory: Path, report: Report, l0: bool = False) -> None:
         report.add("1. TASK_BRIEF.md", "FAIL", "缺少用户任务简报")
         return
     text = _read(path)
+    _check_profile_identity_text(directory, text, report, "1b")
     if not l0:
         workflow = _normalize_value(_field_value(text, "Workflow Version") or "")
         if workflow == WORKFLOW_VERSION:
@@ -692,7 +775,7 @@ def check_task_brief(directory: Path, report: Report, l0: bool = False) -> None:
         report.add(
             "1. TASK_BRIEF.md",
             "FAIL",
-            "须为标准 10 段，或含 v3.1 L0、目标与验收、文件边界、Base Commit 与 Computer-Use 的 mini 简报",
+            "须为标准 10 段，或含 v4.0 L0、目标与验收、文件边界、Base Commit 与 Computer-Use 的 mini 简报",
         )
         return
     report.add("1. TASK_BRIEF.md", "FAIL", f"缺少 {len(missing)} 段：{'、'.join(missing)}")
@@ -1227,6 +1310,7 @@ def check_context_manifest(directory: Path, report: Report, task_id: str) -> Non
         )
         return
     text = _read(manifest)
+    _check_profile_identity_text(directory, text, report, "2g")
 
     version = _field_value(text, "Workflow Version")
     if version is None or _normalize_value(version) != WORKFLOW_VERSION:
@@ -1333,6 +1417,7 @@ def check_plan(directory: Path, report: Report, mode: str, plan_ver: str | None)
         report.add("4. PLAN_vNN.md", "FAIL", "缺少任务书草案（0.Metadata + 14 章）")
         return
     text = _read(path)
+    _check_profile_identity_text(directory, text, report, "4k")
     missing = [section for section in PLAN_SECTIONS if not _has_heading(text, section)]
     if missing:
         report.add("4. PLAN_vNN.md", "FAIL", f"缺少章节：{'; '.join(missing)}")
@@ -1891,7 +1976,7 @@ def check_recon_report(directory: Path, report: Report) -> None:
 def validate(task_dir: Path, mode: str, l0: bool = False) -> Report:
     report = Report(task_dir=str(task_dir), mode=mode, l0=l0)
     if mode not in MODES:
-        report.add("校验模式", "FAIL", f"v3.1 仅支持 {'/'.join(MODES)}")
+        report.add("校验模式", "FAIL", f"v4.0 仅支持 {'/'.join(MODES)}")
         return report
     if not task_dir.is_dir():
         report.add("任务目录", "FAIL", f"{task_dir} 不存在")
@@ -1901,6 +1986,7 @@ def validate(task_dir: Path, mode: str, l0: bool = False) -> Report:
     else:
         report.add("任务目录命名", "FAIL", f"{task_dir.name} 不符合 GD-YYYY-NNNN")
 
+    check_project_profile(task_dir, report)
     plan_path, _ = _find_latest(task_dir, PLAN_FILE_PATTERN)
     plan_ver = (
         PLAN_FILE_PATTERN.match(plan_path.name).group(1)  # type: ignore[union-attr]
@@ -1944,14 +2030,14 @@ def list_required(mode: str, l0: bool = False) -> str:
             "archive": ["TASK_BRIEF.md", "EXECUTION_REPORT_A0x.md", "ACCEPTANCE.md"],
         }
         lines = [
-            f"模式 {mode}（v3.1 L0）：PLAN/APPROVAL_RECORD/FEED_DROP 可省略；"
+            f"模式 {mode}（v4.0 L0）：PLAN/APPROVAL_RECORD/FEED_DROP 可省略；"
             "若存在 PLAN，任意非 L0 计划均失败。"
         ]
         lines.extend(f"  - {item}" for item in mode_items[mode])
         return "\n".join(lines)
     common = [
         "TASK_BRIEF.md",
-        "00_CONTEXT_MANIFEST.md（Workflow Version: v3.1）",
+        "00_CONTEXT_MANIFEST.md（Workflow Version: v4.0）",
         "FEED_DROP/（非空、映射与 SHA-256 存在）",
         "PLAN_vNN.md（写入边界/AC/Test Plan）",
     ]
@@ -1968,7 +2054,7 @@ def list_required(mode: str, l0: bool = False) -> str:
         ],
     }
     lines = [
-        f"模式 {mode} 必查件（v3.1；目录 ^GD-\\d{{4}}-\\d{{4}}$；"
+        f"模式 {mode} 必查件（v4.0；目录 ^GD-\\d{{4}}-\\d{{4}}$；"
         "RECON_REPORT.md 按需；watchdog/archive 自动审计 Git Diff）："
     ]
     lines.extend(f"  - {item}" for item in mode_items[mode])
@@ -1977,7 +2063,7 @@ def list_required(mode: str, l0: bool = False) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="agent-workflow-kit v3.1 交接、证据与 Diff 边界校验器"
+        description="agent-workflow-kit v4.0 交接、证据与 Diff 边界校验器"
     )
     parser.add_argument("task_dir", nargs="?", help="任务目录，如 AI_Context/TASKS/GD-2026-0001")
     parser.add_argument(
@@ -2000,7 +2086,7 @@ def main(argv: list[str] | None = None) -> int:
         hint = LEGACY_MODE_HINTS.get(args.mode)
         migration = f"；请改用 --for {hint}" if hint else ""
         parser.error(
-            f"v3.1 模式仅支持 {'/'.join(MODES)}，收到 {args.mode}{migration}"
+            f"v4.0 模式仅支持 {'/'.join(MODES)}，收到 {args.mode}{migration}"
         )
     if args.list:
         print(list_required(args.mode, args.l0))

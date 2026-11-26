@@ -1,11 +1,13 @@
-# AI ENGINEERING TASK SPECIFICATION — 工程任务书模板 v3.1
+# AI ENGINEERING TASK SPECIFICATION — 工程任务书模板 v4.0
 
 > 使用：复制到任务目录改名 PLAN_v01.md；Planner 填写；状态只能是 DRAFT / NEED_INVESTIGATION，
 > APPROVED 由用户审阅后亲自修改并写 APPROVAL_RECORD.md。撰写纪律见 skills/task-brief-writer。
 
 ## 0. Metadata
 Task ID: GD-YYYY-NNNN / Plan Version: v01 / Status: DRAFT
-Workflow Version: v3.1
+Workflow Version: v4.0
+Project Profile: <layer_versions>
+Profile Hash: <sha256:...>
 Task Level: L1 / Risk Level: R1
 Project: <项目名> / Engine Version: Python 3.12 / Platform: <目标平台>
 Branch / Base Commit: <分支 / commit；无 Git 写可恢复副本时间>

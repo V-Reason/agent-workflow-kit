@@ -3,7 +3,7 @@
 > 使用：Worker 每次尝试一份，改名 EXECUTION_REPORT_A01.md / A02 / A03；结论用语严格枚举。
 
 Task ID: GD-YYYY-NNNN / Plan Version: vNN / Attempt: A01
-Workflow Version: v3.1
+Workflow Version: v4.0
 Worker（模型与模式）: <模型 + agent/对话> / 思考档位: <low/medium/high/xhigh/不适用>
 执行时间: <YYYY-MM-DD HH:MM 时区> / Unity 版本: <2022.3.x / 6000.x> / 分支与 Base Commit: <...>
 
@@ -32,7 +32,7 @@ Planned Writes:
 ## 4. Commands
 | 命令/操作 | 工作目录/位置 | 工具版本 | 退出码/结果 | 日志位置 |
 | --- | --- | --- | --- | --- |
-| <如：RunBatchAudit 无头审计> | <工程根> | <Unity 2022.3.x> | <exit code> | <审计日志路径> |
+| <项目 BUILD_AND_TEST.md 登记的命令> | <工作目录> | <工具版本> | <exit code> | <证据路径> |
 | <EditMode Test Runner：默认 CEO；未授权 Worker 时写 NOT RUN> | <Test Runner> | <test-framework 1.1.33> | <n passed / NOT RUN> | <EVIDENCE 路径> |
 
 Computer-Use Used: NO

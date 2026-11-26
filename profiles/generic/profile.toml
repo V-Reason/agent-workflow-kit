@@ -1,0 +1,19 @@
+schema_version = 1
+id = "generic"
+version = "4.0.0"
+display_name = "Generic Project"
+description = "语言无关的项目 README、工作流入口与基础校验"
+requires = ["core"]
+conflicts = []
+required_paths = ["README.md", "AI_Context/PROJECT_BOARD.md"]
+recommended_gates = ["python scripts/workflow.py doctor ."]
+
+[detection]
+all_paths = []
+any_paths = []
+
+[[actions]]
+type = "managed_block"
+source = "blocks/README.md"
+target = "README.md"
+block_id = "generic"

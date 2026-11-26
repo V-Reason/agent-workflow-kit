@@ -1,4 +1,4 @@
-"""Structural checks for the v3.1 role and template layout."""
+"""Structural checks for the v4.0 role and template layout."""
 
 from __future__ import annotations
 
@@ -100,23 +100,23 @@ class UnityAssemblyTests(unittest.TestCase):
         self.assertEqual(data["references"], ["GAMEDEV.Core"])
         self.assertEqual(data["includePlatforms"], ["Editor"])
 
-    def test_project_audit_has_v31_files_and_headless_exit(self) -> None:
+    def test_workflow_audit_checks_v40_assembly_files(self) -> None:
         path = (
             _ROOT
-            / "templates"
+            / "profiles"
             / "unity2d"
+            / "files"
             / "Assets"
-            / "Scripts"
+            / "AgentWorkflow"
             / "Editor"
-            / "Tools"
-            / "ProjectAuditWindow.cs"
+            / "WorkflowAuditWindow.cs"
         )
         text = path.read_text(encoding="utf-8")
-        self.assertIn("RunBatchAudit()", text)
-        self.assertIn("EditorApplication.Exit", text)
+        self.assertIn("Tools/Agent Workflow/Workflow Audit", text)
+        self.assertIn("FAIL=0", text)
         self.assertIn("AI_Context/PROJECT_BOARD.md", text)
-        self.assertIn("scripts/stage_context.py", text)
-        self.assertIn("scripts/validate_handover.py", text)
+        self.assertIn("AI_Context/WORKFLOW_LOCK.toml", text)
+        self.assertIn(".agents/skills/worker-engine/SKILL.md", text)
 
     def test_unity_brief_has_no_python_toolchain_residue(self) -> None:
         path = (
@@ -169,7 +169,7 @@ class TemplateHygieneTests(unittest.TestCase):
                 ).exists()
             )
 
-    def test_templates_expose_v31_contract_fields(self) -> None:
+    def test_templates_expose_v40_contract_fields(self) -> None:
         for name in ("software-py", "unity2d"):
             task_templates = (
                 _ROOT / "templates" / name / "AI_Context" / "TASKS" / "_templates"
@@ -188,7 +188,7 @@ class TemplateHygieneTests(unittest.TestCase):
                 encoding="utf-8"
             )
             for value in (
-                "Workflow Version: v3.1",
+                "Workflow Version: v4.0",
                 "Write Boundaries",
                 "WORKER_AUTOMATABLE",
             ):
@@ -198,6 +198,16 @@ class TemplateHygieneTests(unittest.TestCase):
             self.assertIn("Unplanned Change Review", acceptance, name)
             self.assertIn("Computer-Use Used", execution, name)
             self.assertIn("NEED_FILES Round Index", manifest, name)
+
+    def test_core_task_templates_are_language_neutral(self) -> None:
+        task_templates = (
+            _ROOT / "profiles" / "core" / "files" / "AI_Context" / "TASKS" / "_templates"
+        )
+        combined = "\n".join(
+            path.read_text(encoding="utf-8") for path in task_templates.glob("*.md")
+        )
+        for term in ("Python 3.12", "src/app", "pytest", "GAMEDEV"):
+            self.assertNotIn(term, combined)
 
 
 class ConsistencyTests(unittest.TestCase):

@@ -1,0 +1,42 @@
+schema_version = 1
+id = "python"
+version = "4.0.0"
+display_name = "Python Project"
+description = "现有 Python 项目的规则、构建门禁与 AI_Context 工具隔离提示"
+requires = ["generic"]
+conflicts = []
+required_paths = ["AGENTS.md", "AI_Context/BUILD_AND_TEST.md"]
+recommended_gates = [
+  "python -m unittest discover -s tests -v",
+  "uv run ruff check .",
+  "uv run mypy",
+  "uv run pytest",
+]
+
+[detection]
+all_paths = []
+any_paths = ["pyproject.toml", "requirements*.txt", "src", "*.py"]
+
+[[actions]]
+type = "managed_block"
+source = "blocks/AGENTS.md"
+target = "AGENTS.md"
+block_id = "python"
+
+[[actions]]
+type = "managed_block"
+source = "blocks/BUILD_AND_TEST.md"
+target = "AI_Context/BUILD_AND_TEST.md"
+block_id = "python"
+
+[[actions]]
+type = "managed_block"
+source = "blocks/CODING_STANDARDS.md"
+target = "AI_Context/CODING_STANDARDS.md"
+block_id = "python"
+
+[[actions]]
+type = "managed_block"
+source = "blocks/gitignore.txt"
+target = ".gitignore"
+block_id = "python"

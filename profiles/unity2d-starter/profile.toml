@@ -1,0 +1,48 @@
+schema_version = 1
+id = "unity2d-starter"
+version = "4.0.0"
+display_name = "Unity 2D Starter"
+description = "在 Unity Hub 已创建的空 2D 项目上安装最小 asmdef、组合根和示例测试"
+requires = ["unity2d"]
+conflicts = []
+create_only = true
+required_paths = ["Assets/Scripts/Core/GameBootstrap.cs"]
+recommended_gates = ["Unity Editor compile", "EditMode Test Runner"]
+
+[detection]
+all_paths = [
+  "Assets",
+  "ProjectSettings/ProjectVersion.txt",
+  "Packages/manifest.json",
+]
+any_paths = []
+
+[[actions]]
+type = "copy_tree"
+source = "kit:templates/unity2d/Assets/Scripts/Core"
+target = "Assets/Scripts/Core"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_tree"
+source = "kit:templates/unity2d/Assets/Scripts/Gameplay"
+target = "Assets/Scripts/Gameplay"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_tree"
+source = "kit:templates/unity2d/Assets/Scripts/UI"
+target = "Assets/Scripts/UI"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_tree"
+source = "kit:templates/unity2d/Assets/Scripts/Editor"
+target = "Assets/Scripts/Editor"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_tree"
+source = "kit:templates/unity2d/Assets/Tests"
+target = "Assets/Tests"
+ownership = "SEEDED"

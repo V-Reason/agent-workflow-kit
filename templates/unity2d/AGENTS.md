@@ -1,6 +1,6 @@
 # AGENTS.md — <项目名> 项目级 Agent 规范（Unity 2D）
 
-> 本文件只写 Unity 项目特有约束；角色、状态机、模型路由与通用红线以 `agent-workflow-kit/AGENTS.md` v3.1 为准。
+> 本文件只写 Unity 项目特有约束；通用规则以 `AGENTS.md` 的 v4.0 托管块、`AI_Context/WORKFLOW_LOCK.toml` 与 `.agents/skills/` 为准。
 
 ## 0. 授权门
 
@@ -8,7 +8,7 @@
 - 写入必须落在批准 Write Boundaries；Forbidden、边界外、未批准删除/重命名立即停止。
 - Worker 可非敏感全仓只读检索，并在 Preflight 自动列出 Discovered Inputs 与 Planned Writes。
 - 未批准时只允许读仓、Preflight 和只读取材。
-- L0 可由 CEO 用三行 mini 简报直派 Worker，仍须 Diff 和 ACCEPTANCE；碰资产、asmdef 或配置即升级。
+- L0 可由 CEO 用紧凑 mini 简报直派 Worker，仍须 Profile 身份、Diff 和 ACCEPTANCE；碰资产、asmdef 或配置即升级。
 
 ## 1. 资产红线
 
@@ -23,6 +23,7 @@
 
 - 项目看板：`AI_Context/PROJECT_BOARD.md`
 - 上下文：`00_CONTEXT_MANIFEST.md` + `FEED_DROP/`
+- 项目装配与自检：`scripts/workflow.py`
 - 施工员：`worker-engine`
 - 独立监察：`watchdog-inspector`
 
@@ -40,10 +41,10 @@ python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for watchdog
 | --- | --- | --- |
 | 程序集编译 | Unity 打开工程（默认 CEO） | Console 0 error |
 | EditMode | Test Runner > EditMode > Run All | `UNITY_GUI_REQUIRED`，由 CEO 或专项授权 Worker 执行 |
-| 结构审计 | `RunBatchAudit` 或菜单审计 | exit code / FAIL = 0 |
+| 工作流审计 | `python scripts/workflow.py doctor .` + Unity `Tools > Agent Workflow > Workflow Audit` | 离线 doctor 通过；Unity 菜单 FAIL = 0 |
 | 交接包 | `validate_handover.py --for watchdog` | exit 0 |
 
-批处理命令以 `AI_Context/BUILD_AND_TEST.md` 为唯一来源。`RunBatchAudit` 自己退出，禁止再追加 `-quit`。
+Unity Editor 菜单审计属于 GUI 门禁；没有登记的 headless 入口时不得臆造批处理命令。
 
 ## 4. 分层红线
 

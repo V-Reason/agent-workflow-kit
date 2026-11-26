@@ -1,4 +1,4 @@
-# METRICS — 六项必记指标周台账（v3.1）
+# METRICS — 六项必记指标周台账（v4.0）
 
 > 每周登记一次；数据来源：ACCEPTANCE.md 与 APPROVAL_RECORD.md；触发线见套件 AGENTS.md 第 9 节。
 

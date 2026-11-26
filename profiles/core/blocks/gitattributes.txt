@@ -1,0 +1,7 @@
+# Agent Workflow Kit v4.0：统一工作流文本换行
+*.py text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.cs text eol=lf
+*.bat text eol=crlf

@@ -1,0 +1,62 @@
+schema_version = 1
+id = "unity2d"
+version = "4.0.0"
+display_name = "Unity 2D Workflow"
+description = "现有 Unity 项目的规则、静态审计、上下文与受保护包配置"
+requires = ["generic"]
+conflicts = []
+required_paths = [
+  "Assets",
+  "ProjectSettings/ProjectVersion.txt",
+  "Packages/manifest.json",
+  "Assets/AgentWorkflow/Editor/WorkflowAuditWindow.cs",
+]
+recommended_gates = [
+  "Run Workflow Audit in Unity Editor",
+  "Unity Test Runner EditMode",
+]
+
+[detection]
+all_paths = [
+  "Assets",
+  "ProjectSettings/ProjectVersion.txt",
+  "Packages/manifest.json",
+]
+any_paths = []
+
+[[actions]]
+type = "managed_block"
+source = "blocks/AGENTS.md"
+target = "AGENTS.md"
+block_id = "unity2d"
+
+[[actions]]
+type = "managed_block"
+source = "blocks/gitignore.txt"
+target = ".gitignore"
+block_id = "unity2d"
+
+[[actions]]
+type = "managed_block"
+source = "blocks/BUILD_AND_TEST.md"
+target = "AI_Context/BUILD_AND_TEST.md"
+block_id = "unity2d"
+
+[[actions]]
+type = "managed_block"
+source = "blocks/CODING_STANDARDS.md"
+target = "AI_Context/CODING_STANDARDS.md"
+block_id = "unity2d"
+
+[[actions]]
+type = "copy_tree"
+source = "files/Assets/AgentWorkflow"
+target = "Assets/AgentWorkflow"
+ownership = "KIT_OWNED"
+
+[[actions]]
+type = "json_merge"
+source = "files/Packages/manifest.json"
+target = "Packages/manifest.json"
+ownership = "MERGED_CONFIG"
+protected = true

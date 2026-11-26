@@ -3,7 +3,9 @@
 > 不要手工拼接源码。复制任务目录后运行：
 > `python scripts/stage_context.py AI_Context/TASKS/GD-YYYY-NNNN --files <Unity/C# paths>`
 
-- Workflow Version: v3.1
+- Workflow Version: v4.0
+- Project Profile: <layer_versions>
+- Profile Hash: <sha256:...>
 - Task ID: GD-YYYY-NNNN
 - Base Commit: <commit 或可恢复副本时间>
 - Baseline Generated At: <YYYY-MM-DDTHH:MM:SS+08:00>

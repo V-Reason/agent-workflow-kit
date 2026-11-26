@@ -1,0 +1,16 @@
+# Agent Workflow Kit v4.0：AI 物理投喂箱只存在于本地
+AI_Context/TASKS/**/FEED_DROP/
+AI_Context/TASKS/**/NEED_FILES/
+AI_Context/.workflow-cache/
+__pycache__/
+*.py[cod]
+
+# 环境变量、密钥与本地临时产物
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+logs/
+tmp/
+*.log

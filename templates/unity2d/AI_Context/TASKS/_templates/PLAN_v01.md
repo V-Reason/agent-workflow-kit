@@ -1,11 +1,13 @@
-# AI ENGINEERING TASK SPECIFICATION — 工程任务书模板 v3.1（Unity 版）
+# AI ENGINEERING TASK SPECIFICATION — 工程任务书模板 v4.0（Unity 版）
 
 > 使用：复制到任务目录改名 PLAN_v01.md；Planner 填写；状态只能是 DRAFT / NEED_INVESTIGATION，
 > APPROVED 由用户审阅后亲自修改并写 APPROVAL_RECORD.md。撰写纪律见 skills/task-brief-writer。
 
 ## 0. Metadata
 Task ID: GD-YYYY-NNNN / Plan Version: v01 / Status: DRAFT
-Workflow Version: v3.1
+Workflow Version: v4.0
+Project Profile: <layer_versions>
+Profile Hash: <sha256:...>
 Task Level: L1 / Risk Level: R1
 Project: <项目名> / Engine Version: Unity 2022.3 LTS 或 Unity 6 / Platform: <目标平台>
 Branch / Base Commit: <分支 / commit；无 Git 写可恢复副本时间>
@@ -76,7 +78,7 @@ Created At: <YYYY-MM-DD HH:MM 时区> / Approved By: <留空> / Approved At: <�
 ## 10. Test Plan
 | AC | Command / Action | CWD | Expected |
 | --- | --- | --- | --- |
-| AC-01 | `UnityEditor -batchmode ... RunBatchAudit` | <ProjectRoot> | exit 0，FAIL = 0 |
+| AC-01 | `python scripts/workflow.py doctor .` + Unity Workflow Audit | <ProjectRoot> | 离线通过；GUI 审计 FAIL = 0 |
 | AC-02 | Window > General > Test Runner > EditMode > Run All | Editor | 全绿，记录通过数 |
 | AC-03 | <CEO 场景实跑与观察点> | <场景> | <期望结果> |
 

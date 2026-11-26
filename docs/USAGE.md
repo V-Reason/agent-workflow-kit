@@ -1,359 +1,336 @@
-# Agent Workflow Kit v3.1 使用指南
+# Agent Workflow Kit v4.0 使用指南
 
-本指南面向 CEO 和本地 Agent，说明如何用 Secretary / Planner / Worker / Watchdog 四角色完成一个任务。
+v4.0 的主变化是：项目创建与装配由 `scripts/workflow.py` 完成，用户不再手工复制模板或逐项合并 Unity 文件。
 
-## 1. 安装与目录
+## 1. 首次使用
 
-### 1.1 套件目录
-
-```text
-agent-workflow-kit/
-  AGENTS.md
-  README.md
-  docs/
-    DESIGN_CHARTER.md
-    USAGE.md
-    MIGRATION_v3.0_to_v3.1.md
-  scripts/
-    stage_context.py
-    validate_handover.py
-  tests/
-  skills/
-    secretary-router/
-    planner-orchestrator/
-    worker-engine/
-    watchdog-inspector/
-    task-brief-writer/
-    unity2d-architect/
-    software-architect/
-    game-systems-designer/
-  templates/
-    software-py/
-    unity2d/
-```
-
-### 1.2 技能装载
-
-| 使用场景 | 加载 |
-| --- | --- |
-| 运营、台账、备菜、回写 | `secretary-router` |
-| 架构、任务书、重规划 | `planner-orchestrator` + `task-brief-writer` |
-| Python 规划 | 再叠加 `software-architect` |
-| Unity 规划 | 再叠加 `unity2d-architect`，玩法系统再加 `game-systems-designer` |
-| 施工 | `worker-engine` 单装 |
-| L1/L2 验证 | `watchdog-inspector`，独立会话/实例 |
-| L0 | CEO 直接找 Worker；需要时 Watchdog 快检 |
-
-原则：按阶段装载，同一会话不混 Worker 与 Watchdog；施工期不加载领域顾问。
-
-## 2. 创建项目
-
-### 2.1 Python
+从套件根目录运行：
 
 ```bash
-cp -R agent-workflow-kit/templates/software-py <project-root>
-cd <project-root>
-uv sync
-uv run ruff format --check .
-uv run ruff check .
-uv run mypy
-uv run pytest
+python scripts/workflow.py
 ```
 
-实例化后填写：
+无参数进入中文向导。向导按顺序询问：
 
-- `AI_Context/PROJECT_OVERVIEW.md`
-- `AI_Context/PROJECT_BOARD.md`
-- `AI_Context/MODULE_MAP.md`
-- `AI_Context/ARCHITECTURE.md`
-- `AI_Context/DEPENDENCIES.md`
+1. 创建新项目或装配现有项目。
+2. 目标路径、项目名与项目类型。
+3. 是否允许 Git 初始化。
+4. 新 Python starter 是否执行 `uv sync`。
+5. 现有项目是否允许脏工作区或受保护配置差异。
 
-### 2.2 Unity 2D
+向导会先给出完整计划，再由用户确认。`Ctrl+C` 或回答 `N` 不写入文件。
 
-1. 用 Unity 2022.3 LTS 或 Unity 6 新建 2D 工程。
-2. 合并模板的 `Assets/`、`Packages/manifest.json`、`AI_Context/`、`scripts/`、`AGENTS.md`、`README.md`、`.gitignore`、`.gitattributes`。
-3. 由 CEO 打开 Unity 并等待编译，Console 0 error。
-4. Worker 先跑 `RunBatchAudit`；EditMode/Test Runner 等 GUI 项默认由 CEO 执行。
-5. 填写 `PROJECT_OVERVIEW.md`、`PROJECT_BOARD.md`、`MODULE_MAP.md`。
+## 2. 装配模式与 Layer
 
-Unity 资产红线：
+项目由有序 layer 组合：
 
-- Agent 不写 `.prefab / .unity / .asset / .meta / .xlsx`。
-- 需要资产操作时，PLAN 给 CEO 手工清单：路径、操作、期望值、判据。
-- `.meta` 必须跟随资产；GUID 不确定即停止。
+| Layer | 必需 | 适用 |
+| --- | --- | --- |
+| `core` | 是 | 工作流宪法、脚本、技能、任务模板和通用上下文 |
+| `generic` | 常用 | 语言无关 README 与通用项目入口 |
+| `python` | 按需 | 现有 Python 项目规则与门禁 |
+| `python-starter` | 按需 | 新 Python 四层业务代码骨架 |
+| `unity2d` | 按需 | 现有 Unity 项目规则、静态审计和受保护包配置 |
+| `unity2d-starter` | 按需 | Unity Hub 空项目上的最小 asmdef、组合根和测试 |
 
-## 3. PROJECT_BOARD
+`core` 自动加入。`python-starter` 依赖 `python`，`unity2d-starter` 依赖 `unity2d`。检测到多个技术栈时可以组合，例如在 Unity 仓库中维护 Python 工具：
 
-Secretary 维护 `AI_Context/PROJECT_BOARD.md`：
-
-```markdown
-## Attention Queue
-| 事项 | Task ID | 当前状态 | 一句话决策提示 | 更新时间 |
-
-## Ticket Index
-| Task ID | 级别 | 状态 | 分支 | 当前 PLAN 版本 | 变更模块摘要 | 一句话结论 |
+```bash
+python scripts/workflow.py attach <repo> \
+  --layers core,generic,python,unity2d --dry-run
 ```
 
-Attention Queue 仅放：
+## 3. 创建新项目
 
-- 待 CEO 批准计划。
-- 待 CEO 手工完成资产操作。
-- 待 CEO 签收验收。
-- Watchdog 异常或流程触发线。
+### 3.1 通用项目
 
-不要把普通进度写入 Attention Queue。
+```bash
+python scripts/workflow.py create ../my-project \
+  --layers core,generic \
+  --name "My Project" \
+  --yes
+```
 
-## 4. Secretary 接单与备菜
+只创建工作流和上下文骨架，不生成业务代码、依赖清单或特定语言配置。
 
-### 4.1 接单
+### 3.2 Python starter
 
-Secretary 读项目 AGENTS、看板、上下文和 Git 状态，然后：
+```bash
+python scripts/workflow.py create ../my-python \
+  --layers core,generic,python,python-starter \
+  --name "My Python Project" \
+  --yes
+```
 
-1. 创建 `AI_Context/TASKS/GD-YYYY-NNNN/`。
-2. 填写 `TASK_BRIEF.md`，或在 L0 写三行 mini 简报。
-3. 初判 L0–L3 / R0–R3。
-4. 更新 Ticket Index。
-5. 每次最多向 CEO 问一个具体问题。
+完成后可由用户选择：
 
-### 4.2 生成 FEED_DROP 与分轮补料
+```bash
+python scripts/workflow.py create ../my-python \
+  --layers core,generic,python,python-starter \
+  --git-init \
+  --install-python-deps \
+  --yes
+```
 
-Agent Planner 可直接只读仓库，默认只生成固定基线：
+`--git-init` 只运行 `git init -b main`，不 commit。`--install-python-deps` 运行 `uv sync`，需要本机已有 `uv`。
+
+### 3.3 Unity
+
+v4.0 不直接生成完整 Unity 工程。先由 Unity Hub 创建空 2D 项目，再运行：
+
+```bash
+python scripts/workflow.py attach <unity-project> \
+  --layers core,generic,unity2d,unity2d-starter \
+  --yes
+```
+
+对于已有内容的 Unity 项目，只选择：
+
+```bash
+python scripts/workflow.py attach <unity-project> \
+  --layers core,generic,unity2d \
+  --yes
+```
+
+第二种方式不注入 `GameBootstrap`、GameClock 或示例 gameplay 代码。Unity 工程必须存在：
+
+```text
+Assets/
+ProjectSettings/ProjectVersion.txt
+Packages/manifest.json
+```
+
+`unity2d` 会安装 `Assets/AgentWorkflow/Editor/` 下的独立静态审计工具，菜单入口为 `Tools > Agent Workflow > Workflow Audit`。
+
+## 4. 装配现有项目
+
+### 4.1 自动检测
+
+```bash
+python scripts/workflow.py attach <project> --dry-run --json
+```
+
+不带 `--layers` 时，装配器始终选择 `core,generic`，并按项目标记追加 `python` 和/或 `unity2d`。自动检测不会选择 starter layer。
+
+### 4.2 显式选择
+
+```bash
+python scripts/workflow.py attach <project> \
+  --layers core,generic,python --name "Existing Project" --yes
+```
+
+项目名默认使用目录名。已经装配的 v4.0 项目可以重复 `attach` 相同 layers/name，作为幂等检查；修改 layer 集合需要手工更新 `WORKFLOW_PROFILE.toml` 后走受控迁移。
+
+### 4.3 安全合并
+
+| Ownership | 首次装配 | 同步 |
+| --- | --- | --- |
+| `KIT_OWNED` | 不存在才写；不同内容阻断 | lock 哈希未变才更新 |
+| `MANAGED_BLOCK` | 保留标记外内容 | 只更新标记内块 |
+| `SEEDED` | 只补缺失文件 | 永不覆盖 |
+| `MERGED_CONFIG` | JSON 只补缺失键 | 再次检查缺失键 |
+
+现有 `AGENTS.md`、`README.md`、`.gitignore`、`.gitattributes` 可保留用户内容并追加托管块。已有 `AI_Context/*.md` 会作为用户文档保留，不用 seed 覆盖。
+
+Unity `Packages/manifest.json`、依赖、配置、公共接口等属于 Protected Changes。发现缺失包时默认阻断并写 `AI_Context/WORKFLOW_CONFLICTS.md`；CEO 审阅后可显式追加：
+
+```text
+--accept-protected
+```
+
+## 5. Git 工作区与副作用
+
+装配器检测到项目 Git 工作区有未提交修改时默认停止。CEO 确认目标范围后可以：
+
+```bash
+python scripts/workflow.py attach <project> \
+  --layers core,generic,python \
+  --allow-dirty \
+  --dry-run
+```
+
+`--allow-dirty` 不降低写入安全规则；它只允许流程继续检查。目标文件仍受 ownership 和冲突规则保护。
+
+默认不执行：
+
+- `git init`
+- 依赖安装或网络请求
+- Unity Editor、Test Runner 或游戏启动
+- commit、merge、push、tag、remote 修改
+
+## 6. Profile 与 Lock
+
+装配后检查：
+
+```bash
+python -c "from pathlib import Path; print(Path('AI_Context/WORKFLOW_PROFILE.toml').read_text(encoding='utf-8'))"
+python -c "from pathlib import Path; print(Path('AI_Context/WORKFLOW_LOCK.toml').read_text(encoding='utf-8'))"
+```
+
+`WORKFLOW_PROFILE.toml`：
+
+```toml
+schema_version = 1
+workflow_version = "v4.0"
+name = "My Project"
+layers = ["core", "generic", "python"]
+
+[parameters]
+project_slug = "my-project"
+```
+
+`WORKFLOW_LOCK.toml` 由工具维护，包含：
+
+- kit 与 workflow 版本。
+- ordered layer 和 `layer_versions`。
+- Profile Hash。
+- 每个托管文件的 owner、SHA-256、托管块 fragment hash 和来源 layer。
+
+不要手工编辑 lock。Task Brief、Plan、Manifest 或 L0 mini 中的 Profile 身份必须与 lock 完全一致。
+
+## 7. 状态、自检与升级
+
+### 7.1 status
+
+```bash
+python scripts/workflow.py status .
+python scripts/workflow.py status . --json
+```
+
+报告 clean、modified、missing、invalid 和“托管块外用户编辑”数量。该命令只读。
+
+### 7.2 doctor
+
+```bash
+python scripts/workflow.py doctor .
+python scripts/workflow.py doctor . --json
+```
+
+检查 profile/lock 一致性、托管文件哈希、必需上下文、task templates、`.agents/skills/` 数量和 Unity 标记。Python 项目未在工具配置中排除 `AI_Context/` 时给 WARN。
+
+退出码：
+
+- `0`：PASS 或只有 WARN。
+- `1`：存在完整性错误或命令执行失败。
+- `2`：用户输入、冲突、路径或受保护动作被阻断。
+
+### 7.3 sync
+
+先检查：
+
+```bash
+python scripts/workflow.py sync <project> \
+  --from <agent-workflow-kit-root> \
+  --check
+```
+
+确认后应用：
+
+```bash
+python scripts/workflow.py sync <project> \
+  --from <agent-workflow-kit-root> \
+  --apply
+```
+
+- `--check` 零写入。
+- `KIT_OWNED` 当前 hash 与 lock 不一致时不覆盖。
+- `MANAGED_BLOCK` 块内未变时可以更新，保留块外用户内容。
+- 任一不可安全合并项会阻断整个 apply，并生成 `AI_Context/WORKFLOW_CONFLICTS.md`。
+- `SEEDED` 项目文档不随 sync 更新。
+
+## 8. 自定义 Profile
+
+```bash
+python scripts/workflow.py profile list
+python scripts/workflow.py profile init ./profiles/team-stack --id team-stack
+python scripts/workflow.py profile validate ./profiles/team-stack
+```
+
+从外部目录装配：
+
+```bash
+python scripts/workflow.py create <project> \
+  --layers core,generic,team-stack \
+  --profile-root ./profiles \
+  --dry-run
+```
+
+Profile 是纯声明式 TOML，不支持任意 hook。schema、action 类型、ownership 和合并示例见 [PROJECT_PROFILES.md](PROJECT_PROFILES.md)。
+
+## 9. 创建任务
+
+从装配项目的 `AI_Context/TASKS/_templates/` 复制所需凭证到：
+
+```text
+AI_Context/TASKS/GD-YYYY-NNNN/
+```
+
+填写 `TASK_BRIEF.md` 时，从 lock 复制：
+
+```text
+Project Profile: core@4.0.0 + generic@4.0.0 + python@4.0.0
+Profile Hash: sha256:...
+```
+
+Planner 的 `PLAN_vNN.md` 必须记录相同值。Secretary 更新 `AI_Context/PROJECT_BOARD.md`。
+
+## 10. 生成上下文
+
+Agent Planner 默认直接只读仓库，Secretary 可生成固定基线：
 
 ```bash
 python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001
 ```
 
-Chat Planner 需要基线源文件时：
+Chat Planner 需要具体源文件时：
 
 ```bash
 python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 \
-  --files src/app/domain/models.py src/app/interfaces/cli.py
+  --files src/app/domain/models.py
 ```
 
-批量清单：
+分轮补料：
 
 ```bash
 python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 \
-  --from-list ai/files.txt
+  --append --reason "确认调用契约" \
+  --files src/app/interfaces/cli.py
 ```
 
-Chat Planner 后续发现具体缺口时，创建下一个补料轮：
+`stage_context.py` 要求项目存在 v4.0 Profile/Lock，并在 Manifest 记录：
+
+- Workflow Version
+- Project Profile
+- Profile Hash
+- Base Commit / 非 Git 恢复时间
+- Token、映射、SHA-256、排除项和 NEED_FILES 轮次索引
+
+`FEED_DROP/` 与 `NEED_FILES/` 被 Git 忽略，不应提交。
+
+## 11. 交接门禁
 
 ```bash
-python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 \
-  --append --reason "确认 NavField 调用契约" \
-  --files Assets/Scripts/Core/GameClock.cs
-```
-
-关闭 chat-safe 扩展名重命名：
-
-```bash
-python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 \
-  --no-chat-safe --files Assets/Scripts/Editor/Editor.asmdef
-```
-
-关闭近期 Git 摘要：
-
-```bash
-python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 --git-diff 0
-```
-
-### 4.3 stage_context 规则
-
-- 首次运行清空重建 `FEED_DROP/` 基线。
-- `--append` 不再修改基线，而是自动创建下一个 `NEED_FILES/ROUND_NN/`；必须提供 `--reason`。
-- 每轮自动去重、记录 Git HEAD、SHA-256、Token 与扁平映射；同路径内容变化可进入新轮次。
-- 一旦存在补料轮，禁止重建基线；需要新基线时创建新任务。
-- 固定装入 L1/L2 文件；缺失必需文件直接失败。
-- L3 扁平命名示例：
-
-```text
-Assets/Scripts/Core/GameClock.cs -> L3__Assets_Scripts_Core_GameClock.cs
-Assets/UI/Hud.uxml               -> L3__Assets_UI_Hud.uxml.txt
-```
-
-- `.cs .py .md .json .txt .yml .yaml .toml .cpp .h .hpp .c` 保留后缀。
-- 其他扩展名在 chat-safe 模式只生成 `.txt` 安全名。
-- 拒绝 `..`、仓库外路径、符号链接逃逸、`.env`、私钥和 credential/secret 文件。
-- `NEED_FILES/ROUND_NN/` 内只能平铺本轮安全文件与 `ROUND_MANIFEST.md`，轮次必须从 01 连续编号。
-- `--json` 输出机器可读结果。
-- 预算警告不阻断；错误以退出码 1 结束。
-
-### 4.4 Manifest 检查
-
-`00_CONTEXT_MANIFEST.md` 应包含：
-
-- Workflow Version: v3.1
-- Task ID
-- Base Commit 或非 Git 可恢复时间
-- 基线生成时间与模式
-- L1/L2/L3/Total Token
-- 文件映射表 + SHA-256
-- `NEED_FILES Round Index`：每轮理由、来源 commit、映射、Token 和哈希
-- 项目目录摘要
-- 明确排除项
-- 警告
-
-Token 启发式：
-
-- 每个 CJK 字符计 1。
-- 其他非空白字符数 ÷ 4 后向上取整。
-- 两层相加后再总计。
-
-## 5. Planner 规划
-
-### 5.1 消费上下文
-
-Chat 模式：把 `FEED_DROP/`、当前必要轮次和 Manifest 拖入对话。Planner 读取轮次索引定位证据来源。
-
-Agent 模式：Planner 从 `FEED_DROP/` 与 Manifest 起步，同时直接只读检索全仓。普通源码、测试和配置缺口不得转成人工补料。
-
-### 5.2 NEED_FILES
-
-只有 Chat Planner 缺少直接决定设计/验收的副本，或任务涉及仓库外、敏感、冻结快照时输出：
-
-```text
-NEED_FILES
-- path/to/file.ext
-轮次目的：该文件解决哪个具体未知问题
-```
-
-Secretary 使用 `--append --reason ... --files ...` 自动创建下一轮。候选文件不补，普通 Agent 直读缺口不补。
-
-### 5.3 PLAN
-
-加载 `task-brief-writer`，输出 `PLAN_vNN.md`：
-
-- 0.Metadata
-- 1. Objective
-- 2. Non-goals
-- 3. Current State
-- 4. Constraints
-- 5. Proposed Design
-- 6. File Scope：Write Boundaries / Forbidden / Read Policy / Protected Changes
-- 7. Execution Steps
-- 8. Engineering Rules
-- 9. Acceptance Criteria：AC / Class / Executor / Criterion / Primary Evidence
-- 10. Test Plan：AC / Command or Action / CWD / Expected
-- 11. Risks
-- 12. Rollback
-- 13. Open Questions
-- 14. Approval
-
-Planner 只写 `DRAFT` / `NEED_INVESTIGATION`。APPROVED 和批准记录由 CEO 完成。
-
-## 6. CEO 批准
-
-CEO 审核：
-
-1. 目标是否准确。
-2. Non-goals 是否覆盖最容易顺手做的扩范围。
-3. Write Boundaries 是否可审计、Forbidden 是否覆盖高危相邻区域。
-4. 方案是否最小且符合架构。
-5. 测试命令是否真实。
-6. 风险和回滚是否足够。
-7. 每条 AC 的执行人、主证据和 Computer-Use 授权是否一致。
-8. 是否有未决问题。
-
-批准动作：
-
-1. 将 PLAN 的 Status 改为 `APPROVED`。
-2. 填写 `APPROVAL_RECORD.md`：Task ID、Plan 版本、Workflow v3.1、Write Boundaries、Explicitly Forbidden、Computer-Use Authorization、Conditions、Base Commit、Approver、时间。
-3. 运行：
-
-```bash
+python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for planner
 python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for worker
-```
-
-退出码 0 后才能交给 Worker。只发送 PLAN 不等于授权。
-
-## 7. Worker 施工
-
-Worker 先做 Preflight：
-
-- 读取批准版本。
-- 核对 Task ID / Plan Version。
-- 核对工作区、分支、Base Commit。
-- 核对 Write Boundaries、Forbidden 和 Protected Changes。
-- 确认引用的文件、接口和命令真实存在。
-- 自动生成 Discovered Inputs 与 Planned Writes，先回报计划，再写入。
-
-施工纪律：
-
-- 标准 L1/L2 使用 `ai/GD-YYYY-NNNN` 隔离分支。
-- 写入必须命中批准动作与边界，且不得命中 Forbidden。
-- Planned Writes 不是审批闸门；边界内可自动补入，边界外必须停止升版。
-- 删除与重命名默认禁止；需要时分别批准 `DELETE` 旧路径与 `CREATE` 新路径。
-- 不顺手重构或格式化。
-- 不新增未批准依赖、配置或资产。
-- 每阶段检查 Diff。
-- 编译测试必须真跑。
-- A01–A03 熔断。
-- 默认不使用 Unity Editor、游戏启动、Inspector 或 Computer-Use；仅任务本质需要且获专项授权时使用。
-
-Worker 每次尝试输出 `EXECUTION_REPORT_Axx.md`，固定 11 节，结论仅允许：
-
-```text
-PASS
-PASS WITH WARNINGS
-FAIL
-BLOCKED
-NOT RUN
-```
-
-## 8. Watchdog 验证
-
-L1/L2 必须独立会话。先运行：
-
-```bash
 python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for watchdog
-```
-
-然后：
-
-1. 读取校验器自动生成的 Git Diff 边界结果。
-2. 对边界内未计划改动逐项写 `JUSTIFIED / UNJUSTIFIED`。
-3. 本人实跑门禁。
-4. 核对 AC Class/Executor/Primary Evidence 与 Computer-Use 记录。
-5. 检查既有断言未删改。
-6. 写 `ACCEPTANCE.md` 事实表与 Watchdog 建议。
-7. CEO 最终填写用户决定。
-
-结论建议：
-
-- PASS
-- PASS WITH WARNINGS
-- FAIL
-
-CEO 最终决定：
-
-- ACCEPT
-- ACCEPT WITH FOLLOW-UP
-- REJECT
-
-归档前运行：
-
-```bash
 python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for archive
 ```
 
-## 9. L0 快速通道
+校验器会检查 Task Brief、Manifest、Plan 中的 Profile 身份与当前项目 lock 完全一致。v3.1 任务作为历史保留，但不能作为 v4.0 活跃交接通过。
 
-L0 适用于局部、模式成熟、低耦合、可快速回退的修改。
+Watchdog/archive 还会自动审计批准 Base Commit 到工作区的 Git Diff。非 Git 项目给 WARN，不能声称范围已机器验证。
 
-三行简报：
+## 12. L0 快速通道
+
+L0 mini brief 必须包含：
 
 ```markdown
-Task ID: GD-2026-0099 / Task Level: L0 / Workflow Version: v3.1 / Base Commit: <commit>
-目标与验收: WORKER_AUTOMATABLE / WORKER / TEST_RESULT / 指定测试命令 exit 0
-文件边界: MODIFY `src/app/**`; FORBIDDEN `pyproject.toml`; Computer-Use Authorization: NONE
+Task ID: GD-2026-0099 / Task Level: L0 / Workflow Version: v4.0 / Base Commit: <commit>
+Project Profile: core@4.0.0 + generic@4.0.0
+Profile Hash: sha256:...
+目标与验收: WORKER_AUTOMATABLE / WORKER / TEST_RESULT / <命令> exit 0
+文件边界: MODIFY `<path>`; FORBIDDEN `<path>`; Computer-Use Authorization: NONE
 ```
-
-CEO 可以直接派 Worker。仍须：
-
-- Diff 检查。
-- 真实命令、退出码、测试或日志证据。
-- `ACCEPTANCE.md`。
 
 归档：
 
@@ -361,159 +338,41 @@ CEO 可以直接派 Worker。仍须：
 python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0099 --l0 --for archive
 ```
 
-若任务目录存在任意 L1/L2/L3 PLAN，`--l0` 失败。
+## 13. Unity 与 Computer-Use
 
-## 10. validate_handover
+- `UNITY_GUI_REQUIRED` 默认由 CEO 执行。
+- Worker 只有 PLAN 和 APPROVAL_RECORD 同时写明以下三段式授权时才可操作原生 UI：
 
-| 模式 | 主要检查 |
-| --- | --- |
-| planner | v3.1 Brief + Manifest/轮次 + FEED_DROP + 14 章 PLAN 草案 |
-| worker | 再加 APPROVED 计划、边界/授权一致和批准记录 |
-| watchdog | 再加执行报告/AC/Computer-Use + 自动 Git Diff |
-| archive | 再加未计划改动审阅和 CEO 最终验收决定 |
-
-```bash
-python scripts/validate_handover.py <task_dir> --for planner
-python scripts/validate_handover.py <task_dir> --for worker --json
-python scripts/validate_handover.py <task_dir> --for watchdog
-python scripts/validate_handover.py <task_dir> --for archive
-python scripts/validate_handover.py --list --for worker
+```text
+AUTHORIZED: TARGET=<窗口/应用>; ACTIONS=<动作白名单>; SCOPE=<目录/场景范围>
 ```
 
-校验器会：
+- 截图只用于无法稳定文本断言的视觉结果，并记录 Visual Purpose / Visual Scenario / Visual Expected。
+- `WORKER_AUTOMATABLE` 的主证据必须是命令、退出码、测试、Diff、Manifest、哈希或日志。
+- Unity Editor 编译和 Test Runner 未实际运行时，证据只能写 `NOT RUN`。
 
-- 按数值选择最新版本。
-- 拦截未填写枚举和整值占位符。
-- 支持无 Git 时间戳。
-- 允许 `APPROVED_WITH_CONDITIONS` 与空格形式。
-- 核对 Task ID 和 Plan Version。
-- 校验 Manifest、FEED_DROP、NEED_FILES 轮次、映射实体与 SHA-256。
-- 校验 AC 分类、执行人、Test Plan、报告与验收集合。
-- 自动对照批准 Base Commit、Write Boundaries 与 Forbidden 审计实际 Git Diff。
-- 非 Git 工作区给显式 WARN，不冒充机器已验证。
-- 对额外未映射文件给 WARN。
-- 旧模式参数退出并提示 v3.1 枚举。
+## 14. FAQ
 
-结构合规不等于代码正确。编译、测试、审计和真实运行仍是必要证据。
+**装配器会修改全局技能目录吗？**
 
-## 11. 验收后回写
+不会。技能进入项目 `.agents/skills/`。
 
-CEO ACCEPT 后 24 小时内，Secretary：
+**为什么项目已经装配后 `attach` 不换 layer？**
 
-1. 读取批准记录、最新报告、验收和实际 diff。
-2. 起草 `CONTEXT_UPDATE_PROPOSAL.md`。
-3. 标清新事实、架构变化、依赖、已知问题和 STALE。
-4. 更新 Ticket Index，清理 Attention Queue。
-5. 更新 METRICS。
-6. 交 CEO 审阅合入长期上下文。
+切换技术栈会改变 Profile Hash 与任务契约。手工修改 profile 后应创建新的受控迁移任务，而不要让重复 attach 静默替换。
 
-## 12. 失败与升级
+**sync 能更新我改过的 AGENTS.md 吗？**
 
-失败分类：
+只改标记外内容时可以更新托管块；块内被修改会阻断。先审阅 `WORKFLOW_CONFLICTS.md`，解决后再 apply。
 
-- 上下文缺失。
-- 工程事实冲突。
-- API 不确定。
-- 编译/测试失败。
-- 范围外依赖。
-- 回归。
-- 环境阻塞。
-- 不可复现。
+**为什么 Unity manifest 会阻断？**
 
-升级诊断包：
+包清单、ProjectSettings、渲染管线、公共接口和配置属于 Protected Changes。工具只显示缺失项，不替 CEO 批准依赖。
 
-- Task ID / Plan / Attempt。
-- 状态和环境。
-- 首错与有效堆栈。
-- 复现步骤。
-- 已改文件和 Diff 摘要。
-- 已尝试动作。
-- 证据位置。
-- 未知项。
-- 需要 CEO 决策的问题。
+**v3.1 任务还能归档吗？**
 
-升级和重规划不消耗 A01–A03。
+历史目录可保留。若继续执行，请使用 v4.0 新任务包；迁移见 [MIGRATION_v3.1_to_v4.0.md](MIGRATION_v3.1_to_v4.0.md)。
 
-## 13. 指标与巡检
+**装配器会 commit 吗？**
 
-| 指标 | 目标 |
-| --- | --- |
-| 越权修改 | 0 |
-| 无证据声称 | 0 |
-| 一次批准率 | ≥ 70% |
-| Worker 首过率 | ≥ 60% |
-| 最终成功率 | ≥ 85% |
-| CEO 干预耗时 / 每任务成本 | 记录并复盘 |
-
-触发复盘：
-
-- 一次批准率 < 70%。
-- 任意越权。
-- CEO 每周因上下文搬运投入 > 2 小时。
-- 月 L1+ 任务 ≥ 8 个。
-
-Watchdog 必须选一个主因：模型决策、上下文过期、流程缺口、需求歧义。改进提案先标 `PROPOSED`，由 CEO 决定。
-
-## 14. Git、网络与隐私
-
-- 不默认联网，不上传工程，不下载依赖。
-- 不默认配置 remote 或 push。
-- `.env`、私钥、Token、日志和本地绝对路径不得入库。
-- `FEED_DROP/` 与 `NEED_FILES/` 永不入库；Manifest 的哈希和轮次索引入库。
-- 提交前和合并前都要扫描 working tree 与 Git 历史。
-- 未经 CEO 明确授权，不删除、重置或重写 Git 历史。
-
-## 15. FAQ
-
-**需要一次装载全部 8 个技能吗？**
-
-不需要。按阶段装载，避免角色串台和上下文污染。
-
-**Chat 模式看不到仓库怎么办？**
-
-拖入 `FEED_DROP/`、当前必要轮次和 Manifest。只有具体未知项才用 `--append --reason` 创建下一轮。
-
-**Agent 模式还需要 FEED_DROP 吗？**
-
-需要固定基线来保持任务坐标和成本可审计；但 Agent Planner 应直接只读检索仓库，不要求 Secretary 预列普通源码文件。
-
-**为什么不能全选源文件投喂？**
-
-Token 成本、噪声和缓存命中都会变差。先从 L1/L2 起步；只有 Chat 缺仓库或异常材料才按轮补 L3。
-
-**Worker 可以自己启动 Unity、游戏或 Inspector 吗？**
-
-默认不可以。标记 `UNITY_GUI_REQUIRED` 只说明验证需要 GUI，不授予工具权限。只有 PLAN 和批准记录同时写明 Computer-Use 目标、动作与范围时才能由 Worker 执行，否则停止并请 CEO 决定。
-
-授权字符串必须为 `AUTHORIZED: TARGET=<窗口/应用>; ACTIONS=<动作白名单>; SCOPE=<目录/场景范围>`。
-
-**截图能证明测试通过吗？**
-
-不能。命令、退出码、测试结果、Diff、Manifest、哈希和日志优先。截图只用于无法稳定文本断言的视觉结果，并写目的、场景与期望。
-
-**Worker 能自己验收吗？**
-
-不能。L1/L2 必须独立 Watchdog；L0 由 CEO 直接看 Diff 与证据。
-
-**Watchdog 发现问题是直接修吗？**
-
-不。它只出失败事实、影响和重规划请求；修复必须走新批准范围。
-
-**为什么 FEED_DROP 不提交？**
-
-它是可重建的本地投喂缓存。分轮补料同理；Manifest 用来源路径、Git HEAD、Token 与 SHA-256 保留可审计因果链。
-
-## 16. 红线速查
-
-1. 未批准不写。
-2. 边界外或 Forbidden 即停。
-3. 不删断言凑绿。
-4. 未跑不写 PASS。
-5. 不覆盖用户未提交修改。
-6. 不碰 Unity 序列化资产。
-7. 不默认联网、commit、merge 或 push。
-8. 不带密钥、凭据和本地绝对路径。
-9. 自动验收项不得用截图作主证据。
-10. Worker 默认不碰 GUI/Computer-Use。
-11. Worker 不自证。
-12. CEO 做最终验收。
+不会。Git 初始化以外的 commit、merge、push、tag 和 remote 修改都需要 CEO 明确授权。

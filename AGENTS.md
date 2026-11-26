@@ -1,4 +1,4 @@
-# AGENTS.md — Agent Workflow Kit v3.1 总纲（机读版）
+# AGENTS.md — Agent Workflow Kit v4.0 总纲（机读版）
 
 > 本文件是全套件唯一工作流宪法。设计意图与边界以 `docs/DESIGN_CHARTER.md` 为准；本文件负责可执行规则、角色、状态、模型路由和门禁。
 
@@ -10,6 +10,17 @@
 4. 编译器、测试工具、审计工具和真实运行输出才是验证证据；未运行不得声称通过。
 5. 任一角色发现范围、资产、数据、凭据、网络或历史不可逆风险时，立即停止并要求 CEO 决策。
 6. Git 默认只读；commit、merge、push、tag、reset 等动作必须有 CEO 明确授权。禁止默认联网上传。
+
+## 0A. Project Profile 与项目装配
+
+- v4.0 项目的唯一装配入口是 `scripts/workflow.py`；不得再用“复制模板 + 手工合并 Unity 文件”作为默认流程。
+- 项目配置写入 `AI_Context/WORKFLOW_PROFILE.toml`，机器锁写入 `AI_Context/WORKFLOW_LOCK.toml`；两者必须同时存在。
+- 装配由有序、可组合的声明式 layer 组成：`core` 必需，`generic` 提供通用项目骨架，`python`/`python-starter` 与 `unity2d`/`unity2d-starter` 提供技术栈能力。
+- Profile 只允许声明文件、变量、检测、seed、托管块和安全合并动作；禁止执行 profile 自带代码。
+- `KIT_OWNED`、`MANAGED_BLOCK`、`SEEDED`、`MERGED_CONFIG` 的写入语义不可混用。业务文件、现有 AI 上下文和受保护配置不得静默覆盖。
+- `sync --check` 零写入；`sync --apply` 遇到用户修改过的托管内容必须阻断并生成 `AI_Context/WORKFLOW_CONFLICTS.md`。
+- 装配默认不初始化 Git、不安装依赖、不联网、不启动 Unity。相关副作用必须显式选择。
+- 项目技能安装在 `.agents/skills/`，不修改用户全局技能目录。
 
 ## 1. CEO 与四角色正交体系
 
@@ -56,9 +67,10 @@ INTAKE -> EXECUTING -> CEO_ACCEPTANCE -> ARCHIVED
 规则：
 
 - 标准任务不得跳过 STAGING、HUMAN_APPROVAL 或独立 Watchdog。
-- L0 支持 CEO 三行 mini 简报直派，但仍需 Workflow Version、Base Commit、AC 类别、Diff 检查、机器证据和 CEO 签收。
+- L0 支持 CEO 紧凑 mini 简报直派，但必须记录 Workflow Version、Project Profile、Profile Hash、Base Commit、AC 类别、Diff 检查、机器证据和 CEO 签收。
 - 范围、接口、依赖、配置、风险或 AC 实质变化必须升版 `vNN+1` 重审。
-- 新 Manifest、PLAN、APPROVAL_RECORD、执行报告、ACCEPTANCE 与 L0 mini 必须声明 `Workflow Version: v3.1`。
+- 新 Manifest、TASK_BRIEF、PLAN、APPROVAL_RECORD、执行报告、ACCEPTANCE 与 L0 mini 必须声明 `Workflow Version: v4.0`。
+- TASK_BRIEF、PLAN 与 00_CONTEXT_MANIFEST 必须从 `WORKFLOW_LOCK.toml` 记录相同的 `Project Profile` 与 `Profile Hash`；校验器发现不一致立即失败。
 - 所有状态必须可从磁盘凭证或 CEO 明确记录恢复，不依赖一次性对话记忆。
 
 ## 3. 任务与风险分级
@@ -275,8 +287,18 @@ agent-workflow-kit/
   docs/
     DESIGN_CHARTER.md
     USAGE.md
-    MIGRATION_v3.0_to_v3.1.md
+    PROJECT_PROFILES.md
+    MIGRATION_v3.1_to_v4.0.md
+  profiles/
+    core/
+    generic/
+    python/
+    python-starter/
+    unity2d/
+    unity2d-starter/
   scripts/
+    workflow.py
+    workflow_kit/
     stage_context.py
     validate_handover.py
   tests/
@@ -284,6 +306,18 @@ agent-workflow-kit/
   templates/
     software-py/
     unity2d/
+```
+
+### workflow.py
+
+```bash
+python scripts/workflow.py
+python scripts/workflow.py create <path> --layers core,generic --name "<name>" [--yes]
+python scripts/workflow.py attach <path> --layers core,generic,python [--yes]
+python scripts/workflow.py status <path> [--json]
+python scripts/workflow.py doctor <path> [--json]
+python scripts/workflow.py sync <path> --from <kit-root> [--check|--apply]
+python scripts/workflow.py profile list|validate|init
 ```
 
 ### stage_context.py
@@ -305,4 +339,4 @@ python scripts/validate_handover.py <task_dir> --for archive
 python scripts/validate_handover.py <task_dir> --l0 --for archive
 ```
 
-v3.1 只接受 `planner|worker|watchdog|archive`；旧模式值会失败并提示新枚举。`--json` 输出机器可读结果，`--list` 列出必查件。watchdog/archive 自动审计批准 Base Commit 到工作区的 Git Diff；非 Git 任务显式 WARN，不能声称范围已机器验证。结构校验不能替代编译、测试与 CEO 验收。
+v4.0 只接受 `planner|worker|watchdog|archive`；旧模式值会失败并提示新枚举。`--json` 输出机器可读结果，`--list` 列出必查件。watchdog/archive 自动审计批准 Base Commit 到工作区的 Git Diff；非 Git 任务显式 WARN，不能声称范围已机器验证。结构校验不能替代编译、测试与 CEO 验收。

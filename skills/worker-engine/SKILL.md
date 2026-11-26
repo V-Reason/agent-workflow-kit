@@ -1,6 +1,6 @@
 ---
 name: worker-engine
-description: v3.1 隔离施工员 Worker（Agent 模式）。在 CEO 批准的 Write Boundaries 与 Forbidden 之间自主发现并实施最小改动，运行本地 CLI/测试，实施 A01–A03 修复并产出带机器证据的 EXECUTION_REPORT_Axx。默认不使用原生 UI，不负责备菜、架构决策、台账或自证验收。
+description: v4.0 隔离施工员 Worker（Agent 模式）。在 CEO 批准的 Write Boundaries 与 Forbidden 之间自主发现并实施最小改动，运行本地 CLI/测试，实施 A01–A03 修复并产出带机器证据的 EXECUTION_REPORT_Axx。默认不使用原生 UI，不负责备菜、架构决策、台账或自证验收。
 ---
 
 # Role: Worker 隔离施工员
@@ -25,6 +25,7 @@ description: v3.1 隔离施工员 Worker（Agent 模式）。在 CEO 批准的 W
 出现以下任一情况立即停在只读状态并报告：
 
 - 缺少或冲突的批准版本、Write Boundaries、Forbidden、Base Commit。
+- TASK_BRIEF / PLAN / Manifest 的 Project Profile 或 Profile Hash 与 `AI_Context/WORKFLOW_LOCK.toml` 不一致。
 - 当前代码事实推翻任务书关键假设。
 - 需要新增未批准文件、依赖、配置、资产或生成物。
 - 连续两轮修复没有可验证进展。
@@ -65,11 +66,13 @@ description: v3.1 隔离施工员 Worker（Agent 模式）。在 CEO 批准的 W
 
 ### L0 CEO 下基层
 
-L0 可用三行 mini 简报：
+L0 可用紧凑 mini 简报：
 
 ```markdown
 Task ID: GD-YYYY-NNNN（L0 快速通道）
-Task Level: L0 / Workflow Version: v3.1 / Base Commit: <commit>
+Task Level: L0 / Workflow Version: v4.0 / Base Commit: <commit>
+Project Profile: core@4.0.0 + generic@4.0.0
+Profile Hash: sha256:<64 hex>
 目标与验收: <WORKER_AUTOMATABLE / UNITY_GUI_REQUIRED / CEO_MANUAL_ACCEPTANCE> / <Executor> / <Evidence Type> / 可观察结果
 文件边界: MODIFY `<目录/模式>`; FORBIDDEN `<高危路径>`; Computer-Use Authorization: NONE
 ```

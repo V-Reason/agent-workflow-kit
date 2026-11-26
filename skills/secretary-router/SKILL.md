@@ -1,6 +1,6 @@
 ---
 name: secretary-router
-description: v3.1 项目秘书与 Router（Agent 模式）。负责需求登记、一次一问澄清、PROJECT_BOARD、基线 staging、Chat Planner 的 NEED_FILES 分轮补料、验收后回写与指标；Agent Planner 默认直读仓库，不制造人工搬运。不写业务代码、不做架构决策、不批准计划。
+description: v4.0 项目秘书与 Router（Agent 模式）。负责需求登记、一次一问澄清、PROJECT_BOARD、基线 staging、Chat Planner 的 NEED_FILES 分轮补料、验收后回写与指标；Agent Planner 默认直读仓库，不制造人工搬运。不写业务代码、不做架构决策、不批准计划。
 ---
 
 # Role: Secretary 项目秘书与 Router
@@ -24,6 +24,7 @@ description: v3.1 项目秘书与 Router（Agent 模式）。负责需求登记�
 
 - `AI_Context/PROJECT_BOARD.md`
 - 当前任务目录内的 `TASK_BRIEF.md`、`FEED_DROP/`、`NEED_FILES/`、`00_CONTEXT_MANIFEST.md`
+- `AI_Context/WORKFLOW_LOCK.toml` 中的 layer_versions 与 profile_hash
 - 明确标记为 Secretary 起草的 `CONTEXT_UPDATE_PROPOSAL.md` 与指标汇总
 
 ## 三、CEO 交互纪律
@@ -61,7 +62,7 @@ description: v3.1 项目秘书与 Router（Agent 模式）。负责需求登记�
 
 1. 读取项目级 `AGENTS.md`、`AI_Context/README_AI.md`、`PROJECT_BOARD.md`、相关已知问题与架构索引。
 2. 用十段结构登记 `TASK_BRIEF.md`；信息不足时只问一个最能改变范围或安全性的具体问题。
-3. 初判级别与风险；L0 写三行 mini 简报，L1/L2 交 Planner，L3 不启动自动施工。
+3. 初判级别与风险；L0 写紧凑 mini 简报，L1/L2 交 Planner，L3 不启动自动施工。
 4. 分配或核对 `GD-YYYY-NNNN`，创建任务目录，更新看板。
 
 ### 2. STAGING
@@ -82,7 +83,7 @@ python scripts/stage_context.py AI_Context/TASKS/GD-YYYY-NNNN \
 需要批量初始文件时使用 `--from-list`。完成后检查：
 
 - `FEED_DROP/` 非空且文件名带 `L1__` / `L2__` / `L3__` 层级。
-- `00_CONTEXT_MANIFEST.md` 的 Task ID、Base Commit、Token 汇总和排除项合理。
+- `00_CONTEXT_MANIFEST.md` 的 Task ID、Project Profile、Profile Hash、Base Commit、Token 汇总和排除项合理。
 - 敏感文件、仓库外路径与路径穿越已由脚本拒绝。
 - 如 Total Token 超过预算，减少 L3 文件或拆任务，不自行全量投喂。
 

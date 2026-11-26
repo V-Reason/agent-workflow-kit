@@ -1,4 +1,4 @@
-# `agent-workflow-kit` 设计总纲（v3.1）
+# `agent-workflow-kit` 设计总纲（v4.0）
 > **副标题**：面向游戏与软件工程的“CEO + Super-Agent”四角色正交协作系统 · 需求分析与架构指导书  
 > **定位**：`agent-workflow-kit` 迭代重构的最高产品需求文档（PRD）与架构宪法  
 > **适用域**：Unity / Unreal / Shader / DCC 工具 / Python 通用工程  
@@ -143,7 +143,7 @@ INTAKE (L0/R0 局部小修) -> EXECUTING (CEO 直连 Worker + 3 行简报) -> AC
 * 原生支持 `--l0` 模式校验快速通道任务的归档完整性。
 
 ### 3.6 工程底座安全与双栈模版硬化
-* **`templates/unity2d`**：继续坚守“AI 不碰 `.prefab / .unity / .asset / .meta`”，统一 `User Manual Checklist` 衔接；将 `ProjectAuditWindow` 改造为支持无头批处理返回真实退出码（`RunBatchAudit`）的真门禁；修正 `TASK_BRIEF` 模板残留。
+* **Unity v4.0 layer**：继续坚守“AI 不碰 `.prefab / .unity / .asset / .meta`”；现有项目由 `unity2d` 安装独立 `WorkflowAuditWindow`，starter 仅用于 Unity Hub 空项目；Unity 编译与 Test Runner 必须记录真实运行状态。
 * **`templates/software-py`**：保持 `domain -> application(Protocol) <- infra <- interfaces` 四层洁净架构，在 `pyproject.toml` 中锁死工具链门禁并隔离 `AI_Context/` 目录。
 
 ---
@@ -157,13 +157,17 @@ agent-workflow-kit/
 ├── AGENTS.md                        # 全套件宪法（唯一模型路由表、四角色矩阵、状态机与红线）
 ├── README.md                        # 极速导览
 ├── docs/
-│   ├── DESIGN_CHARTER.md            # 【本文件】v3.1 设计总纲与需求分析案
-│   └── USAGE.md                     # 操作手册（Secretary/CEO/Brain/Worker/Watchdog 实操走读）
+│   ├── DESIGN_CHARTER.md            # 【本文件】v4.0 设计总纲与需求分析案
+│   ├── USAGE.md                     # 创建/装配、Profile、任务与同步手册
+│   ├── PROJECT_PROFILES.md          # 声明式 Project Profile schema
+│   └── MIGRATION_v3.1_to_v4.0.md    # v3.1 → v4.0 迁移
 ├── scripts/
-│   ├── stage_context.py             # 【新增】物理源文件投喂箱打包脚本（L1__/L2__/L3__ + 清单 + 估算）
-│   └── validate_handover.py         # 【升级】交接包门禁校验器（适配 FEED_DROP、最新版本、防假阳、--l0）
+│   ├── workflow.py                  # 创建、装配、status/doctor/sync/profile 入口
+│   ├── workflow_kit/                # 纯标准库装配运行时
+│   ├── stage_context.py             # FEED_DROP、NEED_FILES、Manifest 与 Profile 身份
+│   └── validate_handover.py         # v4.0 交接、证据、Profile 与 Diff 门禁
 ├── tests/
-│   └── test_validate_and_stage.py   # 【新增】基于标准库 unittest 的双脚本回归测试集
+│   └── test_*.py                    # 装配、模板、上下文与门禁回归
 ├── skills/                          # 8 个权责零重叠的技能（4 核心 + 1 写作插件 + 3 只读顾问）
 │   ├── secretary-router/SKILL.md    # 【新增】项目秘书（Router）
 │   ├── planner-orchestrator/SKILL.md# 架构大脑（保留单贴自足性）
@@ -173,9 +177,10 @@ agent-workflow-kit/
 │   ├── unity2d-architect/SKILL.md   # 纯规划期只读顾问（去执行化，对齐 GAMEDEV.EditorTools）
 │   ├── software-architect/SKILL.md  # 纯规划期只读顾问（去执行化）
 │   └── game-systems-designer/SKILL.md# 纯规划期只读顾问（去执行化）
+├── profiles/                         # 可组合声明式 layer：core/generic/python*/unity2d*
 └── templates/
-    ├── software-py/                 # 内置 PROJECT_BOARD.md、FEED_DROP 屏蔽规则、双脚本同步副本
-    └── unity2d/                     # 内置 PROJECT_BOARD.md、RunBatchAudit 门禁、双脚本同步副本
+    ├── software-py/                 # Python starter 业务骨架
+    └── unity2d/                     # Unity starter 业务骨架构件
 ```
 
 ### 4.2 技能“去冲突与去重”设计准则
@@ -206,7 +211,7 @@ agent-workflow-kit/
 
 ---
 
-## 6. 套件 v3.0 基础迭代路线（Implementation Roadmap）
+## 6. 套件 v3.0 历史迭代路线（归档）
 
 为确保重构过程本身严守“小步、可验证、可回滚”原则，建议将本《设计总纲》拆分为 **两批顺序推进的工程任务**（由我后续为你生成具体可执行任务书）：
 
@@ -226,7 +231,7 @@ agent-workflow-kit/
 
 ---
 
-## 7. v3.1 需求校准（2026-11-26）
+## 7. v4.0 需求校准（2026-11-26）
 
 本节正式吸收 `docs/工作流更新备忘_2026-11-25.md` 的实际运行反馈，并覆盖与本节冲突的旧描述：
 
@@ -235,4 +240,10 @@ agent-workflow-kit/
 3. **机器证据优先**：命令、退出码、测试、Diff、Manifest、哈希和日志是默认主证据。每个 AC 使用 `WORKER_AUTOMATABLE / UNITY_GUI_REQUIRED / CEO_MANUAL_ACCEPTANCE` 分类并声明执行人；自动项不得以截图、视频或观察为主证据。
 4. **Computer-Use 最后手段**：Worker 默认不启动 Unity、游戏或 Inspector。GUI 默认由 CEO 执行；只有 PLAN 与 APPROVAL_RECORD 明确列明目标、动作和范围时，Worker 才可操作专用 UI，并在执行报告中记录必要性、范围和结果。
 5. **自动范围审计**：`validate_handover.py --for watchdog/archive` 从批准 Base Commit 自动审计 Git Diff。非 Git 任务仅给显式 WARN，不能声称范围已完成机器验证。
-6. **v3.1 全面切换**：新任务和模板必须声明 `Workflow Version: v3.1`；旧 v3.0 任务包不自动迁移，按迁移文档新建或重建。
+6. **v4.0 全面切换**：新任务和模板必须声明 `Workflow Version: v4.0`；旧 v3.1 任务包不自动迁移，按迁移文档新建或重建。
+7. **一键创建与装配**：`scripts/workflow.py` 同时支持中文向导和 `create|attach|status|doctor|sync|profile` 子命令；默认先形成完整计划，`--dry-run` 零写入。
+8. **项目内完整装配**：脚本、任务模板、通用上下文与 8 个技能进入目标项目；技能固定安装到 `.agents/skills/`，不修改用户全局目录。
+9. **声明式 Project Profile**：项目由 `core` + 技术栈 layer 组合；`WORKFLOW_PROFILE.toml` 保存声明，`WORKFLOW_LOCK.toml` 保存版本、Profile Hash、所有权和文件哈希。
+10. **安全合并类别**：`KIT_OWNED`、`MANAGED_BLOCK`、`SEEDED`、`MERGED_CONFIG` 分别定义更新与冲突语义；用户业务文件和已有上下文不静默覆盖。
+11. **任务与装配绑定**：TASK_BRIEF、PLAN、Manifest 和 L0 mini 必须记录 Project Profile 与 Profile Hash；校验器与项目 lock 比对。
+12. **Unity 边界不变**：新 Unity 工程由 Unity Hub 创建；装配器仅处理有效空工程。现有 Unity 默认只安装工作流与静态审计，不注入示例 gameplay 代码。

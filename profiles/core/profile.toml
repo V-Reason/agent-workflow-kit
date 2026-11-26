@@ -1,0 +1,159 @@
+schema_version = 1
+id = "core"
+version = "4.0.0"
+display_name = "Core Workflow"
+description = "v4.0 通用工作流、脚本、任务凭证、项目技能与持久化上下文"
+requires = []
+conflicts = []
+required_paths = [
+  "AGENTS.md",
+  "AI_Context/PROJECT_BOARD.md",
+  "AI_Context/TASKS/_templates/TASK_BRIEF.md",
+  "scripts/workflow.py",
+  "scripts/stage_context.py",
+  "scripts/validate_handover.py",
+  ".agents/skills/worker-engine/SKILL.md",
+]
+recommended_gates = [
+  "python scripts/workflow.py doctor .",
+  "python scripts/stage_context.py AI_Context/TASKS/GD-YYYY-NNNN",
+  "python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for planner",
+]
+
+[detection]
+all_paths = []
+any_paths = []
+
+[[actions]]
+type = "copy_file"
+source = "kit:scripts/workflow.py"
+target = "scripts/workflow.py"
+ownership = "KIT_OWNED"
+
+[[actions]]
+type = "copy_tree"
+source = "kit:scripts/workflow_kit"
+target = "scripts/workflow_kit"
+ownership = "KIT_OWNED"
+exclude = ["__pycache__", "*.pyc", "*.pyo"]
+
+[[actions]]
+type = "copy_file"
+source = "kit:scripts/stage_context.py"
+target = "scripts/stage_context.py"
+ownership = "KIT_OWNED"
+
+[[actions]]
+type = "copy_file"
+source = "kit:scripts/validate_handover.py"
+target = "scripts/validate_handover.py"
+ownership = "KIT_OWNED"
+
+[[actions]]
+type = "copy_tree"
+source = "kit:skills"
+target = ".agents/skills"
+ownership = "KIT_OWNED"
+exclude = ["__pycache__", "*.pyc", "*.pyo"]
+
+[[actions]]
+type = "copy_tree"
+source = "files/AI_Context/TASKS/_templates"
+target = "AI_Context/TASKS/_templates"
+ownership = "KIT_OWNED"
+
+[[actions]]
+type = "copy_file"
+source = "files/AI_Context/TASKS/.gitkeep"
+target = "AI_Context/TASKS/.gitkeep"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "files/AI_Context/EVIDENCE/.gitkeep"
+target = "AI_Context/EVIDENCE/.gitkeep"
+ownership = "SEEDED"
+
+[[actions]]
+type = "managed_block"
+source = "blocks/AGENTS.md"
+target = "AGENTS.md"
+block_id = "core"
+
+[[actions]]
+type = "managed_block"
+source = "blocks/gitignore.txt"
+target = ".gitignore"
+block_id = "core"
+
+[[actions]]
+type = "managed_block"
+source = "blocks/gitattributes.txt"
+target = ".gitattributes"
+block_id = "core"
+
+[[actions]]
+type = "copy_file"
+source = "files/AI_Context/PROJECT_BOARD.md"
+target = "AI_Context/PROJECT_BOARD.md"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "files/AI_Context/PROJECT_OVERVIEW.md"
+target = "AI_Context/PROJECT_OVERVIEW.md"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "files/AI_Context/ARCHITECTURE.md"
+target = "AI_Context/ARCHITECTURE.md"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "files/AI_Context/MODULE_MAP.md"
+target = "AI_Context/MODULE_MAP.md"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "files/AI_Context/DEPENDENCIES.md"
+target = "AI_Context/DEPENDENCIES.md"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "files/AI_Context/BUILD_AND_TEST.md"
+target = "AI_Context/BUILD_AND_TEST.md"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "files/AI_Context/CODING_STANDARDS.md"
+target = "AI_Context/CODING_STANDARDS.md"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "files/AI_Context/KNOWN_ISSUES.md"
+target = "AI_Context/KNOWN_ISSUES.md"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "files/AI_Context/DECISION_LOG.md"
+target = "AI_Context/DECISION_LOG.md"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "files/AI_Context/METRICS.md"
+target = "AI_Context/METRICS.md"
+ownership = "SEEDED"
+
+[[actions]]
+type = "copy_file"
+source = "files/AI_Context/README_AI.md"
+target = "AI_Context/README_AI.md"
+ownership = "SEEDED"
