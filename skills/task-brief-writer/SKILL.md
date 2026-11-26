@@ -1,6 +1,6 @@
 ---
 name: task-brief-writer
-description: v3.0 工程任务书撰写插件。供 Planner 在 PLAN 阶段加载，产出 0.Metadata + 14 章、START/END OF TASK 包裹、FEED_DROP/Manifest 引用、精确文件白名单、可判定 AC 和 Worker/Watchdog 交接信息。只写计划，不写工程实现。
+description: v3.1 工程任务书撰写插件。供 Planner 产出 0.Metadata + 14 章、Write Boundaries/Forbidden、AC 分类与主证据、Computer-Use 授权、Test Plan 和 Worker/Watchdog 交接信息。只写计划，不写工程实现。
 ---
 
 # Role: 工程任务书撰写器
@@ -42,6 +42,9 @@ description: v3.0 工程任务书撰写插件。供 Planner 在 PLAN 阶段加�
 - Worker: 模型 + Agent 模式 + 档位
 - Watchdog: 所需独立实例 / 模型 + 档位
 - Context: 00_CONTEXT_MANIFEST.md + Base Commit
+- Workflow Version: v3.1
+- Computer-Use Authorization: NONE 或
+  `AUTHORIZED: TARGET=<窗口/应用>; ACTIONS=<动作白名单>; SCOPE=<目录/场景范围>`
 - Execution Attempt Cap: A01–A03
 - Created At:
 
@@ -61,7 +64,7 @@ description: v3.0 工程任务书撰写插件。供 Planner 在 PLAN 阶段加�
 ## 14. Approval
 ```
 
-状态只能由 Planner 写 `DRAFT` / `NEED_INVESTIGATION`。CEO 批准后可改为 `APPROVED`，并由独立 `APPROVAL_RECORD.md` 锁定版本和文件范围。
+状态只能由 Planner 写 `DRAFT` / `NEED_INVESTIGATION`。CEO 批准后可改为 `APPROVED`，并由独立 `APPROVAL_RECORD.md` 锁定版本、写入边界与 Computer-Use 授权。
 
 ## 四、章节质量标准
 
@@ -87,14 +90,14 @@ description: v3.0 工程任务书撰写插件。供 Planner 在 PLAN 阶段加�
 
 ### 6 File Scope
 
-精确列出：
+固定列出：
 
-- READ
-- CREATE
-- MODIFY
-- FORBIDDEN
+- Write Boundaries：`MODIFY / CREATE / DELETE` 加目录、模式或精确路径；重命名拆成旧路径 DELETE + 新路径 CREATE
+- Forbidden：优先级高于全部 Write Boundaries，必须覆盖相邻高危配置、资产、公共接口与生成文件
+- Read Policy：默认 `REPO_READ_ONLY_EXCEPT_SENSITIVE`
+- Protected Changes：依赖、配置、公共接口、序列化、asmdef、资产等必须升版的情形
 
-目录通配只在能证明边界安全时使用；相邻的高危配置、资产、公共接口和生成文件必须列入 FORBIDDEN。
+目录/模式只在能证明边界安全时使用；禁止根目录、无界 `**` 和含糊空白。Planned Writes 由 Worker Preflight 自动生成，不是逐文件审批闸门。
 
 ### 7 Execution Steps
 
@@ -106,11 +109,18 @@ description: v3.0 工程任务书撰写插件。供 Planner 在 PLAN 阶段加�
 
 ### 9 Acceptance Criteria
 
-写 `AC-01..AC-NN`，每条可判 `PASS / FAIL / NOT RUN / NOT APPLICABLE`，并明确证据位置。
+使用表格为每个 `AC-01..AC-NN` 声明：
+
+- Class：`WORKER_AUTOMATABLE / UNITY_GUI_REQUIRED / CEO_MANUAL_ACCEPTANCE`
+- Executor：`WORKER / CEO / WORKER_COMPUTER_USE`
+- Criterion：可判结果
+- Primary Evidence：COMMAND、EXIT_CODE、TEST_RESULT、DIFF、MANIFEST、HASH、LOG、RUNTIME_OUTPUT、SCREENSHOT、VIDEO、OBSERVATION 的组合
+
+自动项不得以截图、视频或纯观察为主证据。GUI 默认 CEO；Worker Computer-Use 必须匹配专项授权。
 
 ### 10 Test Plan
 
-只引用项目 `BUILD_AND_TEST.md` 已登记且本环境真实可跑的命令；逐项标工作目录和期望。无法运行的环境门禁必须标 `NOT RUN`，不得预先写 PASS。
+用 `AC / Command / Action / CWD / Expected` 表覆盖所有 AC。只引用项目 `BUILD_AND_TEST.md` 已登记且本环境真实可跑的命令；GUI 动作明确执行人。无法运行的环境门禁必须标 `NOT RUN`。
 
 ### 11 Risks
 
@@ -132,24 +142,24 @@ Planner 留空给 CEO。批准内容包括 Plan 版本、允许文件、条件�
 
 计划 Metadata 引用 `00_CONTEXT_MANIFEST.md`，不引用旧 Markdown 上下文包。
 
-若当前暂存不足：
+Agent Planner 可直接读取普通仓库文件，不应生成 NEED_FILES。Chat Planner 的当前暂存不足且未知项直接改变设计或验收时：
 
 ```text
 NEED_FILES
 - path/to/file
-理由：该文件将决定哪个接口、调用方或验证命令
+轮次目的：该文件将解决哪个具体未知问题
 ```
 
-Secretary 补拷后重新审阅 Manifest；Chat 模式与 Agent 模式必须消费同一物理投喂入口。
+Secretary 运行 `--append --reason ... --files ...`，自动创建下一个 `NEED_FILES/ROUND_NN/`。历史轮次、原基线和 SHA-256 记录均保持 append-only；候选文件不补。
 
 ## 六、L0 mini 任务书
 
 L0 不使用 14 章，但保留三行：
 
 ```markdown
-Task ID: GD-YYYY-NNNN（L0）
-目标与验收: 一个可观察结果；验收 = 明确命令或现象
-文件范围: MODIFY path；FORBIDDEN 相邻高危项
+Task ID: GD-YYYY-NNNN / Task Level: L0 / Workflow Version: v3.1 / Base Commit: <commit>
+目标与验收: <Class> / <Executor> / <Primary Evidence> / 一个可观察结果
+文件边界: MODIFY `<目录/模式>`; FORBIDDEN `<高危路径>`; Computer-Use Authorization: NONE
 ```
 
 L0 如涉及公共接口、序列化、配置、资产删除、依赖或跨模块变化，立即升级 L1。
@@ -164,9 +174,9 @@ L0 如涉及公共接口、序列化、配置、资产删除、依赖或跨模�
 
 ## 八、DoD
 
-- [ ] 目标、Non-goals、File Scope 与 AC 完全一致。
-- [ ] 每个拟改文件可追溯到具体执行步骤。
-- [ ] 每条 AC 和测试有可观察证据。
+- [ ] 目标、Non-goals、Write Boundaries、Forbidden、AC 与 Test Plan 一致。
+- [ ] 每个 AC 有 Class、Executor、Criterion 和合法 Primary Evidence。
+- [ ] GUI/Computer-Use 的默认执行人与专项授权无歧义。
 - [ ] Metadata 明示 Worker、Watchdog、Manifest 与尝试上限。
 - [ ] 计划正文可单贴自足，不依赖对话记忆。
 - [ ] 不含模板占位符、未决伪选项或臆造命令。

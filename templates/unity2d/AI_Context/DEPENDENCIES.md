@@ -23,7 +23,7 @@ Unity 内置模块条目（physics2d、audio、animation 等）由编辑器首�
 1. 默认禁止新增或升级（含 manifest.json、插件、渲染管线变更）；需要时在任务书 Constraints 与 Risks 披露。
 2. 引入必须附带：量化收益、维护活跃度、移除成本、降级/原生替代方案。
 3. 能 Unity 原生不引入第三方；引入后同步本表与 ARCHITECTURE.md。
-4. manifest.json / ProjectSettings / 渲染管线变更一律需要重新审批（v3.0 第 10.4 节）。
+4. manifest.json / ProjectSettings / 渲染管线变更一律需要重新审批（v3.1 第 10.4 节）。
 
 ---
 最后核验日期：2026-11-16｜分支：main｜维护人：<项目 Owner>

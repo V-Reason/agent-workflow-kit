@@ -1,4 +1,4 @@
-"""Structural checks for the v3.0 role and template layout."""
+"""Structural checks for the v3.1 role and template layout."""
 
 from __future__ import annotations
 
@@ -100,7 +100,7 @@ class UnityAssemblyTests(unittest.TestCase):
         self.assertEqual(data["references"], ["GAMEDEV.Core"])
         self.assertEqual(data["includePlatforms"], ["Editor"])
 
-    def test_project_audit_has_v3_files_and_headless_exit(self) -> None:
+    def test_project_audit_has_v31_files_and_headless_exit(self) -> None:
         path = (
             _ROOT
             / "templates"
@@ -134,12 +134,16 @@ class UnityAssemblyTests(unittest.TestCase):
 
 
 class TemplateHygieneTests(unittest.TestCase):
-    def test_templates_ignore_feed_drop(self) -> None:
-        for name in ("software-py", "unity2d"):
-            text = (_ROOT / "templates" / name / ".gitignore").read_text(
-                encoding="utf-8"
-            )
+    def test_root_and_templates_ignore_context_copies(self) -> None:
+        roots = [
+            _ROOT / ".gitignore",
+            _ROOT / "templates" / "software-py" / ".gitignore",
+            _ROOT / "templates" / "unity2d" / ".gitignore",
+        ]
+        for path in roots:
+            text = path.read_text(encoding="utf-8")
             self.assertIn("AI_Context/TASKS/**/FEED_DROP/", text)
+            self.assertIn("AI_Context/TASKS/**/NEED_FILES/", text)
 
     def test_python_tooling_excludes_ai_context(self) -> None:
         text = (_ROOT / "templates" / "software-py" / "pyproject.toml").read_text(
@@ -164,6 +168,36 @@ class TemplateHygieneTests(unittest.TestCase):
                     / ("CONTEXT_" + "PACKET_v01.md")
                 ).exists()
             )
+
+    def test_templates_expose_v31_contract_fields(self) -> None:
+        for name in ("software-py", "unity2d"):
+            task_templates = (
+                _ROOT / "templates" / name / "AI_Context" / "TASKS" / "_templates"
+            )
+            plan = (task_templates / "PLAN_v01.md").read_text(encoding="utf-8")
+            approval = (task_templates / "APPROVAL_RECORD.md").read_text(
+                encoding="utf-8"
+            )
+            acceptance = (task_templates / "ACCEPTANCE.md").read_text(
+                encoding="utf-8"
+            )
+            execution = (task_templates / "EXECUTION_REPORT_A01.md").read_text(
+                encoding="utf-8"
+            )
+            manifest = (task_templates / "00_CONTEXT_MANIFEST.md").read_text(
+                encoding="utf-8"
+            )
+            for value in (
+                "Workflow Version: v3.1",
+                "Write Boundaries",
+                "WORKER_AUTOMATABLE",
+            ):
+                self.assertIn(value, plan, name)
+            self.assertIn("Approved Write Boundaries", approval, name)
+            self.assertIn("Computer-Use Authorization", approval, name)
+            self.assertIn("Unplanned Change Review", acceptance, name)
+            self.assertIn("Computer-Use Used", execution, name)
+            self.assertIn("NEED_FILES Round Index", manifest, name)
 
 
 class ConsistencyTests(unittest.TestCase):

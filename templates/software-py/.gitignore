@@ -40,3 +40,4 @@ output/
 
 # --- AI 物理投喂箱（仅本地暂存，绝不入库） ---
 AI_Context/TASKS/**/FEED_DROP/
+AI_Context/TASKS/**/NEED_FILES/

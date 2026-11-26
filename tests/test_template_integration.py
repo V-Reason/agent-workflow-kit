@@ -64,6 +64,7 @@ def _brief() -> str:
     return "\n".join(
         [
             "# TASK BRIEF",
+            "Workflow Version: v3.1",
             "1. Objective: 验证 FEED_DROP 集成",
             "2. Background: 临时演练",
             "3. Current Behavior: 无",
@@ -78,22 +79,66 @@ def _brief() -> str:
     )
 
 
-def _plan(status: str) -> str:
-    headings = "\n".join(f"## {heading}" for heading in PLAN_HEADINGS)
-    return (
-        f"# PLAN v01\nTask ID: {_TASK_ID}\nPlan Version: v01\n"
-        f"Status: {status}\nTask Level: L1 / Risk Level: R1\n"
-        f"{headings}\n"
-    )
+def _plan(status: str, base_commit: str) -> str:
+    lines = [
+        "# PLAN v01",
+        f"Task ID: {_TASK_ID}",
+        "Plan Version: v01",
+        "Workflow Version: v3.1",
+        f"Status: {status}",
+        "Task Level: L1 / Risk Level: R1",
+        f"Branch / Base Commit: main / {base_commit}",
+        "Computer-Use Authorization: NONE",
+        "",
+    ]
+    for heading in PLAN_HEADINGS:
+        lines.extend([f"## {heading}", ""])
+        if heading == "6. File Scope":
+            lines.extend(
+                [
+                    "### Write Boundaries",
+                    "- MODIFY `src/app/**`",
+                    "### Forbidden",
+                    "- `pyproject.toml`",
+                    "### Read Policy",
+                    "- REPO_READ_ONLY_EXCEPT_SENSITIVE",
+                    "### Protected Changes",
+                    "- 依赖、配置、公共接口与序列化变更必须升版",
+                    "",
+                ]
+            )
+        elif heading == "9. Acceptance Criteria":
+            lines.extend(
+                [
+                    "| AC | Class | Executor | Criterion | Primary Evidence |",
+                    "| --- | --- | --- | --- | --- |",
+                    "| AC-01 | WORKER_AUTOMATABLE | WORKER | 交接通过 | TEST_RESULT+LOG |",
+                    "",
+                ]
+            )
+        elif heading == "10. Test Plan":
+            lines.extend(
+                [
+                    "| AC | Command / Action | CWD | Expected |",
+                    "| --- | --- | --- | --- |",
+                    "| AC-01 | python -m unittest | . | exit 0 |",
+                    "",
+                ]
+            )
+    return "\n".join(lines) + "\n"
 
 
-def _approval() -> str:
-    commit = "b64326037c36ff8dce842d0496d4c0894532ae7c"
+def _approval(commit: str) -> str:
     return (
         "# APPROVAL RECORD\n"
         f"Task ID / Approved Plan: {_TASK_ID} / v01\n"
+        "Workflow Version: v3.1\n"
         "Decision: APPROVED\n"
-        "Approved Scope:\n- MODIFY src/app/domain/models.py\n"
+        "Approved Write Boundaries:\n"
+        "- MODIFY src/app/**\n"
+        "Explicitly Forbidden:\n"
+        "- pyproject.toml\n"
+        "Computer-Use Authorization: NONE\n"
         "Conditions: 无\n"
         f"Branch / Base Commit: main / {commit}\n"
         "Approver: CEO\n"
@@ -102,19 +147,49 @@ def _approval() -> str:
 
 
 def _execution_report(task_id: str = _TASK_ID) -> str:
-    headings = "\n".join(f"## {heading}" for heading in EXEC_HEADINGS)
-    return (
-        "# EXECUTION REPORT A01\n"
-        f"Task ID: {task_id} / Plan Version: v01 / Attempt: A01\n"
-        f"{headings}\n"
-        "Conclusion: PASS\n"
-    )
+    lines = [
+        "# EXECUTION REPORT A01",
+        f"Task ID: {task_id} / Plan Version: v01 / Attempt: A01",
+        "Workflow Version: v3.1",
+        "",
+    ]
+    for heading in EXEC_HEADINGS:
+        lines.extend([f"## {heading}", ""])
+        if heading == "4. Commands":
+            lines.extend(
+                [
+                    "Computer-Use Used: NO",
+                    "Computer-Use Authorization: NONE",
+                    "Necessity: NOT APPLICABLE",
+                    "Scope: NOT APPLICABLE",
+                    "Result: NOT APPLICABLE",
+                    "",
+                ]
+            )
+        elif heading == "5. AC Mapping":
+            lines.extend(
+                [
+                    "| AC | Result | Evidence Type | Evidence |",
+                    "| --- | --- | --- | --- |",
+                    "| AC-01 | PASS | TEST_RESULT+LOG | evidence.log |",
+                    "",
+                ]
+            )
+    lines.append("Conclusion: PASS")
+    return "\n".join(lines) + "\n"
 
 
 def _acceptance() -> str:
     return (
         f"# ACCEPTANCE — {_TASK_ID}\n"
-        "| AC-01 | 临时演练 | 通过 | 命令 exit 0 |\n"
+        "Workflow Version: v3.1\n\n"
+        "| AC | Class | Executor | Expected | Result | Primary Evidence |\n"
+        "| --- | --- | --- | --- | --- | --- |\n"
+        "| AC-01 | WORKER_AUTOMATABLE | WORKER | 交接通过 | PASS | TEST_RESULT+LOG |\n\n"
+        "## Unplanned Change Review\n\n"
+        "| Path | Decision | Reason |\n"
+        "| --- | --- | --- |\n"
+        "| none | NOT APPLICABLE | 无未计划改动 |\n\n"
         "Watchdog 结论建议: PASS\n"
         "用户决定: ACCEPT\n"
     )
@@ -143,6 +218,7 @@ class TemplateIntegrationTests(unittest.TestCase):
                 _run(["git", "commit", "-m", "test: template baseline"], project).returncode,
                 0,
             )
+            base_commit = _run(["git", "rev-parse", "HEAD"], project).stdout.strip()
 
             task = project / "AI_Context" / "TASKS" / _TASK_ID
             stage = _run(
@@ -164,7 +240,7 @@ class TemplateIntegrationTests(unittest.TestCase):
             self.assertNotIn("FEED_DROP", status.stdout)
 
             _write(task / "TASK_BRIEF.md", _brief())
-            _write(task / "PLAN_v01.md", _plan("DRAFT"))
+            _write(task / "PLAN_v01.md", _plan("DRAFT", base_commit))
             planner = _run(
                 [
                     sys.executable,
@@ -177,8 +253,8 @@ class TemplateIntegrationTests(unittest.TestCase):
             )
             self.assertEqual(planner.returncode, 0, planner.stdout + planner.stderr)
 
-            _write(task / "PLAN_v01.md", _plan("APPROVED"))
-            _write(task / "APPROVAL_RECORD.md", _approval())
+            _write(task / "PLAN_v01.md", _plan("APPROVED", base_commit))
+            _write(task / "APPROVAL_RECORD.md", _approval(base_commit))
             worker = _run(
                 [
                     sys.executable,
@@ -220,9 +296,12 @@ class TemplateIntegrationTests(unittest.TestCase):
             l0_task = project / "AI_Context" / "TASKS" / "GD-2026-0009"
             _write(
                 l0_task / "TASK_BRIEF.md",
-                "# L0\nTask Level: L0\n"
-                "目标与验收: 局部修复 exit 0\n"
-                "文件范围: MODIFY src/app/domain/models.py\n",
+                "# L0\n"
+                f"Task ID: GD-2026-0009 / Task Level: L0 / Workflow Version: v3.1 / "
+                f"Base Commit: {base_commit}\n"
+                "目标与验收: WORKER_AUTOMATABLE / WORKER / TEST_RESULT / exit 0\n"
+                "文件边界: MODIFY `src/app/**`; FORBIDDEN `pyproject.toml`; "
+                "Computer-Use Authorization: NONE\n",
             )
             _write(
                 l0_task / "EXECUTION_REPORT_A01.md",
@@ -241,6 +320,104 @@ class TemplateIntegrationTests(unittest.TestCase):
                 project,
             )
             self.assertEqual(l0_archive.returncode, 0, l0_archive.stdout + l0_archive.stderr)
+
+    def test_unity_template_v31_handover_structure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            project = Path(temp) / "unity2d"
+            shutil.copytree(
+                _ROOT / "templates" / "unity2d",
+                project,
+                ignore=shutil.ignore_patterns(
+                    "Library",
+                    "Temp",
+                    "Logs",
+                    "__pycache__",
+                ),
+            )
+            self.assertEqual(_run(["git", "init", "-b", "main"], project).returncode, 0)
+            _run(["git", "config", "user.name", "Temp CEO"], project)
+            _run(["git", "config", "user.email", "temp-ceo@example.invalid"], project)
+            self.assertEqual(_run(["git", "add", "-A"], project).returncode, 0)
+            self.assertEqual(
+                _run(["git", "commit", "-m", "test: unity baseline"], project).returncode,
+                0,
+            )
+            base_commit = _run(["git", "rev-parse", "HEAD"], project).stdout.strip()
+
+            task = project / "AI_Context" / "TASKS" / _TASK_ID
+            stage = _run(
+                [
+                    sys.executable,
+                    "scripts/stage_context.py",
+                    str(task),
+                    "--files",
+                    "Assets/Scripts/Core/GameClock.cs",
+                    "--json",
+                ],
+                project,
+            )
+            self.assertEqual(stage.returncode, 0, stage.stderr)
+
+            plan = _plan("DRAFT", base_commit).replace(
+                "src/app/**", "Assets/Scripts/**"
+            )
+            _write(task / "TASK_BRIEF.md", _brief())
+            _write(task / "PLAN_v01.md", plan)
+            planner = _run(
+                [
+                    sys.executable,
+                    "scripts/validate_handover.py",
+                    str(task),
+                    "--for",
+                    "planner",
+                ],
+                project,
+            )
+
+            self.assertEqual(planner.returncode, 0, planner.stdout + planner.stderr)
+
+            _write(task / "PLAN_v01.md", plan.replace("Status: DRAFT", "Status: APPROVED"))
+            _write(
+                task / "APPROVAL_RECORD.md",
+                _approval(base_commit).replace("src/app/**", "Assets/Scripts/**"),
+            )
+            worker = _run(
+                [
+                    sys.executable,
+                    "scripts/validate_handover.py",
+                    str(task),
+                    "--for",
+                    "worker",
+                ],
+                project,
+            )
+            self.assertEqual(worker.returncode, 0, worker.stdout + worker.stderr)
+
+            _write(task / "EXECUTION_REPORT_A01.md", _execution_report())
+            watchdog = _run(
+                [
+                    sys.executable,
+                    "scripts/validate_handover.py",
+                    str(task),
+                    "--for",
+                    "watchdog",
+                ],
+                project,
+            )
+            self.assertEqual(watchdog.returncode, 0, watchdog.stdout + watchdog.stderr)
+
+            _write(task / "ACCEPTANCE.md", _acceptance())
+            archive = _run(
+                [
+                    sys.executable,
+                    "scripts/validate_handover.py",
+                    str(task),
+                    "--for",
+                    "archive",
+                ],
+                project,
+            )
+            self.assertEqual(archive.returncode, 0, archive.stdout + archive.stderr)
 
 
 if __name__ == "__main__":

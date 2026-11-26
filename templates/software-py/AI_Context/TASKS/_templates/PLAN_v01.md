@@ -1,10 +1,11 @@
-# AI ENGINEERING TASK SPECIFICATION — 工程任务书模板 v3.0
+# AI ENGINEERING TASK SPECIFICATION — 工程任务书模板 v3.1
 
 > 使用：复制到任务目录改名 PLAN_v01.md；Planner 填写；状态只能是 DRAFT / NEED_INVESTIGATION，
 > APPROVED 由用户审阅后亲自修改并写 APPROVAL_RECORD.md。撰写纪律见 skills/task-brief-writer。
 
 ## 0. Metadata
 Task ID: GD-YYYY-NNNN / Plan Version: v01 / Status: DRAFT
+Workflow Version: v3.1
 Task Level: L1 / Risk Level: R1
 Project: <项目名> / Engine Version: Python 3.12 / Platform: <目标平台>
 Branch / Base Commit: <分支 / commit；无 Git 写可恢复副本时间>
@@ -12,6 +13,8 @@ Planner: <模型> + chat 模式 + high 档位建议（L2 改 xhigh）
 Worker: <模型> + agent 模式
 Watchdog: <独立会话/实例 + 模型 + 档位>
 Context Manifest: 00_CONTEXT_MANIFEST.md + Base Commit <哈希或恢复时间>
+Computer-Use Authorization: NONE
+<!-- 如需授权：AUTHORIZED: TARGET=<窗口/应用>; ACTIONS=<动作白名单>; SCOPE=<目录/场景范围> -->
 Execution Attempt Cap: A01-A03
 Created At: <YYYY-MM-DD HH:MM 时区> / Approved By: <留空> / Approved At: <留空>
 
@@ -35,11 +38,18 @@ Created At: <YYYY-MM-DD HH:MM 时区> / Approved By: <留空> / Approved At: <�
 <架构、职责、数据流、接口；备选方案与取舍理由；公共接口变更必须在此披露>
 
 ## 6. File Scope
-- READ: <路径>
-- CREATE: <路径>
-- MODIFY: <路径>
-- FORBIDDEN: <相邻高危路径（配置、公共接口、序列化定义、AI_Context 之外文档）>
-- 需重审条件：<出现哪些情况必须升版>
+### Write Boundaries
+- MODIFY `<目录/模式或精确路径，例如 src/app/**>`
+- CREATE `<目录/模式或精确路径，例如 tests/**>`
+### Forbidden
+- `<相邻高危路径，例如 pyproject.toml>`
+### Read Policy
+- REPO_READ_ONLY_EXCEPT_SENSITIVE
+### Protected Changes
+- 新增依赖、改配置、改公共接口、改序列化格式、删除/重命名必须停止并升版重审
+
+> Worker 可非敏感全仓只读检索，并在 Preflight 自动生成 Discovered Inputs 与 Planned Writes。
+> Planned Writes 是可审计清单，不是逐文件审批闸门；实际 Diff 必须落在上述边界内。
 
 ## 7. Execution Steps
 | # | 前置条件 | 路径/位置 | 操作 | 预期结果 | 检查方式 |
@@ -50,14 +60,16 @@ Created At: <YYYY-MM-DD HH:MM 时区> / Approved By: <留空> / Approved At: <�
 - 生命周期 / 内存性能 / 异步线程 / 错误与资源处理规则；明确禁止的实现方式
 
 ## 9. Acceptance Criteria
-- AC-01: <可判定 PASS / FAIL / NOT RUN 的条目>
-- AC-02: <...>
+| AC | Class | Executor | Criterion | Primary Evidence |
+| --- | --- | --- | --- | --- |
+| AC-01 | WORKER_AUTOMATABLE | WORKER | <可判定结果> | <TEST_RESULT+LOG / DIFF / HASH 等> |
+| AC-02 | CEO_MANUAL_ACCEPTANCE | CEO | <必须由 CEO 判断的结果> | <OBSERVATION / SCREENSHOT / VIDEO> |
 
 ## 10. Test Plan
-- 静态：`uv run ruff check .` / `uv run mypy`
-- 编译：`uv sync && uv run python -c "import app"`
-- 自动测试：`uv run pytest`
-- 运行时：<真实可跑的命令>
+| AC | Command / Action | CWD | Expected |
+| --- | --- | --- | --- |
+| AC-01 | `uv run pytest` | . | exit 0，全部通过 |
+| AC-02 | <CEO 手工检查动作> | <场景> | <期望结果> |
 
 ## 11. Risks
 | 风险 | 影响 | 概率 | 缓解 |
@@ -75,4 +87,4 @@ Created At: <YYYY-MM-DD HH:MM 时区> / Approved By: <留空> / Approved At: <�
 
 ## 14. Approval
 - Decision: PENDING
-- 批准后填写：Plan Version: v01 / Approved Scope: <逐条路径与操作> / Conditions: <附加约束> / Explicitly Forbidden: <明确禁止项> / Approved By: <批准人> / Approved At: <时间含时区>
+- 批准后填写：Plan Version: v01 / Approved Write Boundaries / Explicitly Forbidden / Computer-Use Authorization / Conditions / Approved By / Approved At

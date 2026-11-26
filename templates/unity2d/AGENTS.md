@@ -1,11 +1,12 @@
 # AGENTS.md — <项目名> 项目级 Agent 规范（Unity 2D）
 
-> 本文件只写 Unity 项目特有约束；角色、状态机、模型路由与通用红线以 `agent-workflow-kit/AGENTS.md` v3.0 为准。
+> 本文件只写 Unity 项目特有约束；角色、状态机、模型路由与通用红线以 `agent-workflow-kit/AGENTS.md` v3.1 为准。
 
 ## 0. 授权门
 
 - 写入必须有 CEO 批准的 PLAN 版本与 `APPROVAL_RECORD.md`。
-- 修改范围严格等于批准 File Scope；越界立即停止。
+- 写入必须落在批准 Write Boundaries；Forbidden、边界外、未批准删除/重命名立即停止。
+- Worker 可非敏感全仓只读检索，并在 Preflight 自动列出 Discovered Inputs 与 Planned Writes。
 - 未批准时只允许读仓、Preflight 和只读取材。
 - L0 可由 CEO 用三行 mini 简报直派 Worker，仍须 Diff 和 ACCEPTANCE；碰资产、asmdef 或配置即升级。
 
@@ -16,6 +17,7 @@
 3. `ProjectSettings/`、`Packages/manifest.json`、渲染管线、asmdef references 默认禁止，需专项批准。
 4. 不删除看似无用的资产、元文件或目录。
 5. 手工清单每条必须含路径、操作、期望值与判据。
+6. Unity Editor、游戏启动、Inspector 和最终视觉观察默认由 CEO 执行；Worker 只有获得 Computer-Use 专项授权时才可使用原生 UI。
 
 ## 2. 正式入口
 
@@ -26,6 +28,8 @@
 
 ```bash
 python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 --files Assets/Scripts/Core/GameClock.cs
+python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 \
+  --append --reason "<未解决未知项>" --files Assets/Scripts/Core/Extra.cs
 python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for worker
 python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for watchdog
 ```
@@ -34,8 +38,8 @@ python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for watchdog
 
 | 门禁 | 命令 / 操作 | 期望 |
 | --- | --- | --- |
-| 程序集编译 | Unity 打开工程 | Console 0 error |
-| EditMode | Test Runner > EditMode > Run All | 全绿 |
+| 程序集编译 | Unity 打开工程（默认 CEO） | Console 0 error |
+| EditMode | Test Runner > EditMode > Run All | `UNITY_GUI_REQUIRED`，由 CEO 或专项授权 Worker 执行 |
 | 结构审计 | `RunBatchAudit` 或菜单审计 | exit code / FAIL = 0 |
 | 交接包 | `validate_handover.py --for watchdog` | exit 0 |
 
@@ -69,6 +73,6 @@ python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for watchdog
 
 ## 7. 归档
 
-- 证据：`AI_Context/EVIDENCE/GD-YYYY-NNNN/`
+- 证据：`AI_Context/EVIDENCE/GD-YYYY-NNNN/`；优先审计日志、退出码、测试结果、Diff 和 Profiler 数据
 - CEO 验收：`ACCEPTANCE.md`
 - 验收后 24 小时内由 Secretary 依据 diff 起草上下文回写提案，CEO 审阅合入。

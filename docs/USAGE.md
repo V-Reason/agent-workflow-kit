@@ -1,4 +1,4 @@
-# Agent Workflow Kit v3.0 使用指南
+# Agent Workflow Kit v3.1 使用指南
 
 本指南面向 CEO 和本地 Agent，说明如何用 Secretary / Planner / Worker / Watchdog 四角色完成一个任务。
 
@@ -13,6 +13,7 @@ agent-workflow-kit/
   docs/
     DESIGN_CHARTER.md
     USAGE.md
+    MIGRATION_v3.0_to_v3.1.md
   scripts/
     stage_context.py
     validate_handover.py
@@ -71,8 +72,8 @@ uv run pytest
 
 1. 用 Unity 2022.3 LTS 或 Unity 6 新建 2D 工程。
 2. 合并模板的 `Assets/`、`Packages/manifest.json`、`AI_Context/`、`scripts/`、`AGENTS.md`、`README.md`、`.gitignore`、`.gitattributes`。
-3. Unity 打开后等待编译，Console 0 error。
-4. 运行 EditMode 测试和结构审计。
+3. 由 CEO 打开 Unity 并等待编译，Console 0 error。
+4. Worker 先跑 `RunBatchAudit`；EditMode/Test Runner 等 GUI 项默认由 CEO 执行。
 5. 填写 `PROJECT_OVERVIEW.md`、`PROJECT_BOARD.md`、`MODULE_MAP.md`。
 
 Unity 资产红线：
@@ -114,7 +115,15 @@ Secretary 读项目 AGENTS、看板、上下文和 Git 状态，然后：
 4. 更新 Ticket Index。
 5. 每次最多向 CEO 问一个具体问题。
 
-### 4.2 生成 FEED_DROP
+### 4.2 生成 FEED_DROP 与分轮补料
+
+Agent Planner 可直接只读仓库，默认只生成固定基线：
+
+```bash
+python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001
+```
+
+Chat Planner 需要基线源文件时：
 
 ```bash
 python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 \
@@ -128,11 +137,12 @@ python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 \
   --from-list ai/files.txt
 ```
 
-补料：
+Chat Planner 后续发现具体缺口时，创建下一个补料轮：
 
 ```bash
 python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 \
-  --append --files Assets/Scripts/Core/GameClock.cs
+  --append --reason "确认 NavField 调用契约" \
+  --files Assets/Scripts/Core/GameClock.cs
 ```
 
 关闭 chat-safe 扩展名重命名：
@@ -150,7 +160,10 @@ python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 --git-diff 0
 
 ### 4.3 stage_context 规则
 
-- 默认清空重建 `FEED_DROP/`；`--append` 按原路径合并去重。
+- 首次运行清空重建 `FEED_DROP/` 基线。
+- `--append` 不再修改基线，而是自动创建下一个 `NEED_FILES/ROUND_NN/`；必须提供 `--reason`。
+- 每轮自动去重、记录 Git HEAD、SHA-256、Token 与扁平映射；同路径内容变化可进入新轮次。
+- 一旦存在补料轮，禁止重建基线；需要新基线时创建新任务。
 - 固定装入 L1/L2 文件；缺失必需文件直接失败。
 - L3 扁平命名示例：
 
@@ -162,6 +175,7 @@ Assets/UI/Hud.uxml               -> L3__Assets_UI_Hud.uxml.txt
 - `.cs .py .md .json .txt .yml .yaml .toml .cpp .h .hpp .c` 保留后缀。
 - 其他扩展名在 chat-safe 模式只生成 `.txt` 安全名。
 - 拒绝 `..`、仓库外路径、符号链接逃逸、`.env`、私钥和 credential/secret 文件。
+- `NEED_FILES/ROUND_NN/` 内只能平铺本轮安全文件与 `ROUND_MANIFEST.md`，轮次必须从 01 连续编号。
 - `--json` 输出机器可读结果。
 - 预算警告不阻断；错误以退出码 1 结束。
 
@@ -169,11 +183,13 @@ Assets/UI/Hud.uxml               -> L3__Assets_UI_Hud.uxml.txt
 
 `00_CONTEXT_MANIFEST.md` 应包含：
 
+- Workflow Version: v3.1
 - Task ID
 - Base Commit 或非 Git 可恢复时间
-- 生成时间与模式
+- 基线生成时间与模式
 - L1/L2/L3/Total Token
-- 文件映射表
+- 文件映射表 + SHA-256
+- `NEED_FILES Round Index`：每轮理由、来源 commit、映射、Token 和哈希
 - 项目目录摘要
 - 明确排除项
 - 警告
@@ -188,21 +204,21 @@ Token 启发式：
 
 ### 5.1 消费上下文
 
-Chat 模式：把整个 `FEED_DROP/` 拖入对话，并附 Manifest。Planner 读取 Manifest 定位层级和原路径。
+Chat 模式：把 `FEED_DROP/`、当前必要轮次和 Manifest 拖入对话。Planner 读取轮次索引定位证据来源。
 
-Agent 模式：Planner 从 `FEED_DROP/` 与 Manifest 起步，同时保留全仓只读检索权。
+Agent 模式：Planner 从 `FEED_DROP/` 与 Manifest 起步，同时直接只读检索全仓。普通源码、测试和配置缺口不得转成人工补料。
 
 ### 5.2 NEED_FILES
 
-需要补文件时输出：
+只有 Chat Planner 缺少直接决定设计/验收的副本，或任务涉及仓库外、敏感、冻结快照时输出：
 
 ```text
 NEED_FILES
 - path/to/file.ext
-理由：该文件决定哪个调用契约或错误边界
+轮次目的：该文件解决哪个具体未知问题
 ```
 
-Secretary 用 `--append` 补齐。Planner 不应要求全仓投喂。
+Secretary 使用 `--append --reason ... --files ...` 自动创建下一轮。候选文件不补，普通 Agent 直读缺口不补。
 
 ### 5.3 PLAN
 
@@ -214,11 +230,11 @@ Secretary 用 `--append` 补齐。Planner 不应要求全仓投喂。
 - 3. Current State
 - 4. Constraints
 - 5. Proposed Design
-- 6. File Scope
+- 6. File Scope：Write Boundaries / Forbidden / Read Policy / Protected Changes
 - 7. Execution Steps
 - 8. Engineering Rules
-- 9. Acceptance Criteria
-- 10. Test Plan
+- 9. Acceptance Criteria：AC / Class / Executor / Criterion / Primary Evidence
+- 10. Test Plan：AC / Command or Action / CWD / Expected
 - 11. Risks
 - 12. Rollback
 - 13. Open Questions
@@ -232,16 +248,17 @@ CEO 审核：
 
 1. 目标是否准确。
 2. Non-goals 是否覆盖最容易顺手做的扩范围。
-3. File Scope 是否精确。
+3. Write Boundaries 是否可审计、Forbidden 是否覆盖高危相邻区域。
 4. 方案是否最小且符合架构。
 5. 测试命令是否真实。
 6. 风险和回滚是否足够。
-7. 是否有未决问题。
+7. 每条 AC 的执行人、主证据和 Computer-Use 授权是否一致。
+8. 是否有未决问题。
 
 批准动作：
 
 1. 将 PLAN 的 Status 改为 `APPROVED`。
-2. 填写 `APPROVAL_RECORD.md`：Task ID、Plan 版本、Scope、Conditions、Base Commit、Approver、时间。
+2. 填写 `APPROVAL_RECORD.md`：Task ID、Plan 版本、Workflow v3.1、Write Boundaries、Explicitly Forbidden、Computer-Use Authorization、Conditions、Base Commit、Approver、时间。
 3. 运行：
 
 ```bash
@@ -257,19 +274,22 @@ Worker 先做 Preflight：
 - 读取批准版本。
 - 核对 Task ID / Plan Version。
 - 核对工作区、分支、Base Commit。
-- 核对批准文件白名单。
+- 核对 Write Boundaries、Forbidden 和 Protected Changes。
 - 确认引用的文件、接口和命令真实存在。
-- 先回报计划，再写入。
+- 自动生成 Discovered Inputs 与 Planned Writes，先回报计划，再写入。
 
 施工纪律：
 
 - 标准 L1/L2 使用 `ai/GD-YYYY-NNNN` 隔离分支。
-- 只改批准范围。
+- 写入必须命中批准动作与边界，且不得命中 Forbidden。
+- Planned Writes 不是审批闸门；边界内可自动补入，边界外必须停止升版。
+- 删除与重命名默认禁止；需要时分别批准 `DELETE` 旧路径与 `CREATE` 新路径。
 - 不顺手重构或格式化。
 - 不新增未批准依赖、配置或资产。
 - 每阶段检查 Diff。
 - 编译测试必须真跑。
 - A01–A03 熔断。
+- 默认不使用 Unity Editor、游戏启动、Inspector 或 Computer-Use；仅任务本质需要且获专项授权时使用。
 
 Worker 每次尝试输出 `EXECUTION_REPORT_Axx.md`，固定 11 节，结论仅允许：
 
@@ -291,12 +311,13 @@ python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for watchdog
 
 然后：
 
-1. 逐路径比较 Diff 与批准范围。
-2. 本人实跑门禁。
-3. 核对 AC 证据。
-4. 检查既有断言未删改。
-5. 写 `ACCEPTANCE.md` 事实表与 Watchdog 建议。
-6. CEO 最终填写用户决定。
+1. 读取校验器自动生成的 Git Diff 边界结果。
+2. 对边界内未计划改动逐项写 `JUSTIFIED / UNJUSTIFIED`。
+3. 本人实跑门禁。
+4. 核对 AC Class/Executor/Primary Evidence 与 Computer-Use 记录。
+5. 检查既有断言未删改。
+6. 写 `ACCEPTANCE.md` 事实表与 Watchdog 建议。
+7. CEO 最终填写用户决定。
 
 结论建议：
 
@@ -323,15 +344,15 @@ L0 适用于局部、模式成熟、低耦合、可快速回退的修改。
 三行简报：
 
 ```markdown
-Task ID: GD-2026-0099（L0）
-目标与验收: 修复某个局部问题；验收 = 指定测试命令 exit 0
-文件范围: MODIFY src/app/example.py；FORBIDDEN pyproject.toml 与公共接口
+Task ID: GD-2026-0099 / Task Level: L0 / Workflow Version: v3.1 / Base Commit: <commit>
+目标与验收: WORKER_AUTOMATABLE / WORKER / TEST_RESULT / 指定测试命令 exit 0
+文件边界: MODIFY `src/app/**`; FORBIDDEN `pyproject.toml`; Computer-Use Authorization: NONE
 ```
 
 CEO 可以直接派 Worker。仍须：
 
 - Diff 检查。
-- 真实命令证据。
+- 真实命令、退出码、测试或日志证据。
 - `ACCEPTANCE.md`。
 
 归档：
@@ -346,10 +367,10 @@ python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0099 --l0 --for arc
 
 | 模式 | 主要检查 |
 | --- | --- |
-| planner | Brief + Manifest + FEED_DROP + 14 章 PLAN 草案 |
-| worker | 再加 APPROVED 计划和批准记录 |
-| watchdog | 再加最新执行报告 |
-| archive | 再加 CEO 最终验收决定 |
+| planner | v3.1 Brief + Manifest/轮次 + FEED_DROP + 14 章 PLAN 草案 |
+| worker | 再加 APPROVED 计划、边界/授权一致和批准记录 |
+| watchdog | 再加执行报告/AC/Computer-Use + 自动 Git Diff |
+| archive | 再加未计划改动审阅和 CEO 最终验收决定 |
 
 ```bash
 python scripts/validate_handover.py <task_dir> --for planner
@@ -366,9 +387,12 @@ python scripts/validate_handover.py --list --for worker
 - 支持无 Git 时间戳。
 - 允许 `APPROVED_WITH_CONDITIONS` 与空格形式。
 - 核对 Task ID 和 Plan Version。
-- 校验 Manifest 文件和 FEED_DROP 实体。
+- 校验 Manifest、FEED_DROP、NEED_FILES 轮次、映射实体与 SHA-256。
+- 校验 AC 分类、执行人、Test Plan、报告与验收集合。
+- 自动对照批准 Base Commit、Write Boundaries 与 Forbidden 审计实际 Git Diff。
+- 非 Git 工作区给显式 WARN，不冒充机器已验证。
 - 对额外未映射文件给 WARN。
-- 旧模式参数退出并提示 v3 枚举。
+- 旧模式参数退出并提示 v3.1 枚举。
 
 结构合规不等于代码正确。编译、测试、审计和真实运行仍是必要证据。
 
@@ -435,7 +459,7 @@ Watchdog 必须选一个主因：模型决策、上下文过期、流程缺口�
 - 不默认联网，不上传工程，不下载依赖。
 - 不默认配置 remote 或 push。
 - `.env`、私钥、Token、日志和本地绝对路径不得入库。
-- `FEED_DROP/` 永不入库。
+- `FEED_DROP/` 与 `NEED_FILES/` 永不入库；Manifest 的哈希和轮次索引入库。
 - 提交前和合并前都要扫描 working tree 与 Git 历史。
 - 未经 CEO 明确授权，不删除、重置或重写 Git 历史。
 
@@ -447,15 +471,25 @@ Watchdog 必须选一个主因：模型决策、上下文过期、流程缺口�
 
 **Chat 模式看不到仓库怎么办？**
 
-拖入 `FEED_DROP/` 和 Manifest。它是真实文件入口，不是手工摘要。
+拖入 `FEED_DROP/`、当前必要轮次和 Manifest。只有具体未知项才用 `--append --reason` 创建下一轮。
 
 **Agent 模式还需要 FEED_DROP 吗？**
 
-需要。Manifest 与 FEED_DROP 让任务基线可审计、上下文可复用；Agent 额外保留只读全仓搜索权。
+需要固定基线来保持任务坐标和成本可审计；但 Agent Planner 应直接只读检索仓库，不要求 Secretary 预列普通源码文件。
 
 **为什么不能全选源文件投喂？**
 
-Token 成本、噪声和缓存命中都会变差。先从 L1/L2 起步，再按 NEED_FILES 补 L3。
+Token 成本、噪声和缓存命中都会变差。先从 L1/L2 起步；只有 Chat 缺仓库或异常材料才按轮补 L3。
+
+**Worker 可以自己启动 Unity、游戏或 Inspector 吗？**
+
+默认不可以。标记 `UNITY_GUI_REQUIRED` 只说明验证需要 GUI，不授予工具权限。只有 PLAN 和批准记录同时写明 Computer-Use 目标、动作与范围时才能由 Worker 执行，否则停止并请 CEO 决定。
+
+授权字符串必须为 `AUTHORIZED: TARGET=<窗口/应用>; ACTIONS=<动作白名单>; SCOPE=<目录/场景范围>`。
+
+**截图能证明测试通过吗？**
+
+不能。命令、退出码、测试结果、Diff、Manifest、哈希和日志优先。截图只用于无法稳定文本断言的视觉结果，并写目的、场景与期望。
 
 **Worker 能自己验收吗？**
 
@@ -467,17 +501,19 @@ Token 成本、噪声和缓存命中都会变差。先从 L1/L2 起步，再按 
 
 **为什么 FEED_DROP 不提交？**
 
-它是可重建的本地投喂缓存。Manifest 入库，真实源文件仍在业务路径。
+它是可重建的本地投喂缓存。分轮补料同理；Manifest 用来源路径、Git HEAD、Token 与 SHA-256 保留可审计因果链。
 
 ## 16. 红线速查
 
 1. 未批准不写。
-2. 超范围即停。
+2. 边界外或 Forbidden 即停。
 3. 不删断言凑绿。
 4. 未跑不写 PASS。
 5. 不覆盖用户未提交修改。
 6. 不碰 Unity 序列化资产。
 7. 不默认联网、commit、merge 或 push。
 8. 不带密钥、凭据和本地绝对路径。
-9. Worker 不自证。
-10. CEO 做最终验收。
+9. 自动验收项不得用截图作主证据。
+10. Worker 默认不碰 GUI/Computer-Use。
+11. Worker 不自证。
+12. CEO 做最终验收。

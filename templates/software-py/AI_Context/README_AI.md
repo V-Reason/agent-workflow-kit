@@ -1,6 +1,6 @@
-# README_AI — v3.0 项目上下文入口
+# README_AI — v3.1 项目上下文入口
 
-Secretary 准备真实文件，Planner 从 `FEED_DROP/` 与 `00_CONTEXT_MANIFEST.md` 开始分析，Worker 在批准范围施工，Watchdog 独立验证。`AI_Context/` 是所有角色的持久化事实源。
+Secretary 准备基线，Planner 从 `FEED_DROP/` 与 `00_CONTEXT_MANIFEST.md` 开始分析，Worker 在批准 Write Boundaries 内自主发现和施工，Watchdog 独立验证。`AI_Context/` 是所有角色的持久化事实源。
 
 ## 标准流程
 
@@ -18,8 +18,9 @@ python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for archive
 2. L2 模块层只选相关架构、看板、模块地图与依赖。
 3. L3 代码层由 Secretary 用脚本复制真实文件，不在 Markdown 中手工粘贴。
 4. Chat 拖拽与 Agent 直读共用同一 `FEED_DROP`；Agent 仍可只读检索全仓。
-5. `FEED_DROP/` 被 Git 忽略；`00_CONTEXT_MANIFEST.md` 入库。
+5. `FEED_DROP/` 与 `NEED_FILES/` 被 Git 忽略；`00_CONTEXT_MANIFEST.md` 的轮次索引与 SHA-256 入库。
 6. 关键事实标 VERIFIED / OBSERVED / INFERRED / UNKNOWN / STALE。
+7. Agent Planner 默认不产生普通 `NEED_FILES`；Chat Planner 缺仓库时用 `--append --reason` 分轮补料。
 
 ## 项目文件
 

@@ -30,6 +30,7 @@ logs/
 
 # AI 物理投喂箱只存在于本地
 AI_Context/TASKS/**/FEED_DROP/
+AI_Context/TASKS/**/NEED_FILES/
 
 # 编辑器与系统
 .idea/

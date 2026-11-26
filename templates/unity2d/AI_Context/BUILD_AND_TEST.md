@@ -15,8 +15,8 @@
 | V0 | 审阅 PLAN、接口、生命周期与 Non-goals | 无未决阻塞 |
 | V1 | Unity 编译后的 Console + 结构审计 | 0 error，审计 FAIL = 0 |
 | V2 | Assembly 编译 | 0 error |
-| V3 | Window > General > Test Runner > EditMode > Run All | 全绿 |
-| V4 | 编辑器/运行时场景验证 | 观察点与截图/录屏证据 |
+| V3 | Window > General > Test Runner > EditMode > Run All | 全绿；标 `UNITY_GUI_REQUIRED` |
+| V4 | 编辑器/运行时场景验证 | 观察点；截图/录屏仅在无法文本断言时使用 |
 | V5 | Profiler / Memory / DrawCall | 符合任务预算 |
 
 ## 无头结构审计
@@ -34,6 +34,9 @@
 
 ```bash
 python scripts/stage_context.py AI_Context/TASKS/GD-YYYY-NNNN --files Assets/Scripts/Core/GameClock.cs
+python scripts/stage_context.py AI_Context/TASKS/GD-YYYY-NNNN \
+  --append --reason "<chat planner 未解决的具体未知项>" \
+  --files Assets/Scripts/Core/Extra.cs
 python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for planner
 python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for worker
 python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for watchdog
@@ -42,7 +45,10 @@ python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for archive
 
 ## 证据
 
-Console、Test Runner、审计日志、截图与 Profiler 数据存入 `AI_Context/EVIDENCE/GD-YYYY-NNNN/`。验收表必须记录命令、版本、退出码或观察点。
+Console、Test Runner、审计日志、退出码、Diff、Profiler 数据与必要截图存入
+`AI_Context/EVIDENCE/GD-YYYY-NNNN/`。机器可验项以命令、退出码和日志为主证据；
+视觉项必须记录 Visual Purpose、Visual Scenario 与 Visual Expected，截图数量最小化。
+Unity Editor/游戏启动/Inspector 默认由 CEO 执行，Worker 仅在 Computer-Use 专项授权下操作。
 
 ---
 

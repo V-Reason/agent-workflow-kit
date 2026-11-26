@@ -2,8 +2,8 @@
 
 ## 强制门禁（VALIDATING 前必须全过）
 
-1. Unity 打开工程后 Console 0 error（warning 需逐条归因）。
-2. Test Runner > EditMode 全绿（当前基线：6 个用例）。
+1. 批处理结构审计优先；需要打开 Unity 时记录执行人，Console 0 error（warning 需逐条归因）。
+2. Test Runner EditMode 全绿（当前基线：6 个用例）；默认属 `UNITY_GUI_REQUIRED`。
 3. GAMEDEV > 审计 > 项目结构审计：FAIL = 0。
 4. 交接包校验：`python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for watchdog`。
 

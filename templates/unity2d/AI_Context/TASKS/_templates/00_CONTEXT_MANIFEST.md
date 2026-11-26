@@ -3,12 +3,14 @@
 > 不要手工拼接源码。复制任务目录后运行：
 > `python scripts/stage_context.py AI_Context/TASKS/GD-YYYY-NNNN --files <Unity/C# paths>`
 
+- Workflow Version: v3.1
 - Task ID: GD-YYYY-NNNN
 - Base Commit: <commit 或可恢复副本时间>
-- Generated At: <YYYY-MM-DDTHH:MM:SS+08:00>
-- Generation Mode: rebuild
+- Baseline Generated At: <YYYY-MM-DDTHH:MM:SS+08:00>
+- Baseline Generation Mode: baseline
 - Chat Safe: ON
 - Budget Limit: 150000
+- Need Files Rounds: 0
 
 ## Token Budget
 
@@ -21,9 +23,9 @@
 
 ## File Mapping
 
-| 暂存名 | 层级 | 原路径 | 估算 Token |
-| --- | --- | --- | ---: |
-| `L1__PROJECT_OVERVIEW.md` | L1 | `AI_Context/PROJECT_OVERVIEW.md` | <n> |
+| 暂存名 | 层级 | 原路径 | 估算 Token | SHA-256 |
+| --- | --- | --- | ---: | --- |
+| `L1__PROJECT_OVERVIEW.md` | L1 | `AI_Context/PROJECT_OVERVIEW.md` | <n> | <sha256> |
 
 ## Project Tree Summary
 
@@ -34,5 +36,7 @@
 ## Explicit Exclusions
 
 - `.git/`、`.venv/`、缓存、Library、Temp、Logs
-- 所有 `FEED_DROP/`
+- 所有 `FEED_DROP/` 与 `NEED_FILES/`
 - 未选择业务文件、敏感文件与未批准资产
+
+## NEED_FILES Round Index

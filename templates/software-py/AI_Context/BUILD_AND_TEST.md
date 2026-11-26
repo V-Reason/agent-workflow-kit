@@ -30,6 +30,9 @@ uv sync
 
 ```bash
 python scripts/stage_context.py AI_Context/TASKS/GD-YYYY-NNNN --files src/app/example.py
+python scripts/stage_context.py AI_Context/TASKS/GD-YYYY-NNNN \
+  --append --reason "<chat planner 未解决的具体未知项>" \
+  --files src/app/extra.py
 python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for planner
 python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for worker
 python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for watchdog
@@ -49,7 +52,9 @@ python scripts/validate_handover.py AI_Context/TASKS/GD-YYYY-NNNN --for archive
 
 ## 证据
 
-命令、版本、退出码、日志与截图存入 `AI_Context/EVIDENCE/GD-YYYY-NNNN/`，执行报告与 ACCEPTANCE 使用相对路径引用。
+命令、版本、退出码、测试结果、Diff、Manifest、哈希和日志存入
+`AI_Context/EVIDENCE/GD-YYYY-NNNN/`，执行报告与 ACCEPTANCE 使用相对路径引用。
+截图仅用于无法稳定文本断言的视觉结果，并记录观察目的、场景与期望；自动项不得以截图为主证据。
 
 ---
 

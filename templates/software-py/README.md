@@ -1,4 +1,4 @@
-# software-py — Python 通用软件 v3.0 模板
+# software-py — Python 通用软件 v3.1 模板
 
 面向 CEO + Secretary / Planner / Worker / Watchdog 工作流的 Python 项目骨架：四层架构、`FEED_DROP` 真实源文件投喂、项目看板、uv/ruff/mypy/pytest 门禁和任务凭证。
 
@@ -24,9 +24,9 @@ Python 要求 ≥ 3.12。首次实例化后填写 `AI_Context/PROJECT_OVERVIEW.m
 | `src/app/interfaces/` | CLI 与组合根 |
 | `tests/unit/`、`tests/integration/` | 自动回归 |
 | `AI_Context/PROJECT_BOARD.md` | Secretary 维护的 Attention Queue + Ticket Index |
-| `AI_Context/TASKS/_templates/` | v3 任务凭证 |
-| `scripts/stage_context.py` | 生成 flat `FEED_DROP` 与 Manifest |
-| `scripts/validate_handover.py` | planner / worker / watchdog / archive 门禁 |
+| `AI_Context/TASKS/_templates/` | v3.1 任务凭证 |
+| `scripts/stage_context.py` | 生成 flat `FEED_DROP`、分轮 `NEED_FILES` 与 Manifest |
+| `scripts/validate_handover.py` | v3.1 交接、证据与 Git Diff 边界门禁 |
 | `AGENTS.md` | 项目级授权、分层和技能装载 |
 
 ## 首个任务
@@ -40,7 +40,7 @@ python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for watchdog
 python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for archive
 ```
 
-`FEED_DROP/` 只存在于本地并被 Git 忽略；`00_CONTEXT_MANIFEST.md` 入库作为可审计索引。
+`FEED_DROP/` 与 `NEED_FILES/ROUND_NN/` 只存在于本地并被 Git 忽略；`00_CONTEXT_MANIFEST.md` 入库保存来源、Token、SHA-256 与 append-only 轮次索引。
 
 ## 质量隔离
 

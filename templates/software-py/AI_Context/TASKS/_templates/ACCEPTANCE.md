@@ -3,19 +3,28 @@
 > 使用：Watchdog（独立于 Worker）生成事实部分；最终决定由 CEO 作出。
 
 Task ID: GD-YYYY-NNNN / 验收人: <Watchdog> / 时间: <YYYY-MM-DD HH:MM 时区>
+Workflow Version: v3.1
 验证层次: V0–V5 实际执行项：<列出>
 
-| 项 | 期望 | 实测 | 证据 |
-| --- | --- | --- | --- |
-| AC-01 | <任务书原文> | <实测结果> | <命令+退出码 / 日志 / 截图路径> |
-| AC-02 | <...> | <...> | <...> |
-| 范围遵守 | 修改 100% 在批准范围内 | <一致 / 范围外 N 处> | <Diff 摘要路径> |
-| 非目标保护 | 非目标行为不变 | <一致 / 回归点> | <回归命令输出> |
-| 用量披露 | Usage 与档位如实 | <一致 / 缺失> | <执行报告第 7 节> |
+| AC | Class | Executor | Expected | Result | Primary Evidence |
+| --- | --- | --- | --- | --- | --- |
+| AC-01 | WORKER_AUTOMATABLE | WORKER | <任务书原文> | <PASS / FAIL / NOT RUN / BLOCKED / NOT APPLICABLE> | <TEST_RESULT+LOG / DIFF / HASH> |
+| AC-02 | CEO_MANUAL_ACCEPTANCE | CEO | <人工验收项> | <结果> | <OBSERVATION / SCREENSHOT / VIDEO> |
+
+视觉证据仅在无法稳定文本断言时使用，并记录：
+- Visual Purpose: <观察目的>
+- Visual Scenario: <执行场景>
+- Visual Expected: <期望结果>
+
+## Unplanned Change Review
+
+| Path | Decision | Reason |
+| --- | --- | --- |
+| none | NOT APPLICABLE | 无边界内未计划改动 |
 
 未解决问题与警告:
 - <逐条列出；无则写 none>
 
 Watchdog 结论建议: PASS / PASS WITH WARNINGS / FAIL
 用户决定: ACCEPT / ACCEPT WITH FOLLOW-UP / REJECT
-后续动作: <FOLLOW-UP 转新任务；REJECT 按 v3.0 第 13 章处理；ACCEPTED 后 24h 内提交上下文回写提案>
+后续动作: <FOLLOW-UP 转新任务；REJECT 按 v3.1 第 13 章处理；ACCEPTED 后 24h 内提交上下文回写提案>

@@ -62,7 +62,7 @@ Assets/Tests/Editor/              GAMEDEV.Tests.Editor
 | V1 | Editor 编译、结构审计 |
 | V2 | Assembly 编译 0 error |
 | V3 | EditMode / PlayMode 测试 |
-| V4 | 场景实跑、截图/录屏与视觉观察 |
+| V4 | 已登记的 CLI/无头入口优先；仅原生 UI 场景实跑时，由 CEO 或 Computer-Use 专项授权执行 |
 | V5 | Profiler、GC、DrawCall、内存、平台专项 |
 
 批处理审计命令必须引用 `AI_Context/BUILD_AND_TEST.md`，不得臆造：
@@ -84,7 +84,7 @@ UnityEditor -batchmode -nographics -projectPath <root>
 3. 保持不变的接口和资产边界。
 4. 性能预算与 Hot Path 风险。
 5. 编译、测试、审计、场景和 Profiler 验证矩阵。
-6. CEO 手工资产清单草案（路径、操作、期望、判据）。
+6. CEO 手工资产清单与 GUI 执行人草案（路径、动作、期望、判据、Computer-Use 授权）。
 7. 待补 FEED_DROP 文件。
 
 ## 八、DoD
@@ -94,4 +94,5 @@ UnityEditor -batchmode -nographics -projectPath <root>
 - [ ] 生命周期、序列化、资源和场景边界已覆盖。
 - [ ] 2D 物理、时间、渲染和 GC 风险可验证。
 - [ ] 手工资产步骤有路径、期望和判据。
+- [ ] Unity GUI、游戏启动、Inspector 与视觉观察没有默认交给 Worker。
 - [ ] 门禁命令来自已登记真实入口。

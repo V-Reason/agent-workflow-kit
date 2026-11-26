@@ -1,10 +1,12 @@
-"""Standard-library regression tests for the v3.0 kit scripts."""
+"""Standard-library regression tests for the v3.1 kit scripts."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -114,19 +116,278 @@ class StageContextTests(StageContextTestBase):
         self.assertTrue((feed / "L3__Assets_UI_Hud.uxml").is_file())
         self.assertFalse((feed / "L3__Assets_UI_Hud.uxml.txt").exists())
 
-    def test_append_merges_previous_manifest_by_source_path(self) -> None:
+    def test_incremental_append_creates_round_and_preserves_baseline(self) -> None:
         self._write("src/one.py", "print('one')\n")
-        self._write("src/two.py", "print('two')\n")
+        source = self._write("src/two.py", "print('two')\n")
         first = self.run_stage("--files", "src/one.py")
         self.assertEqual(first.returncode, 0, first.stderr)
 
-        second, payload = self.run_stage_json("--append", "--files", "src/two.py")
+        second, payload = self.run_stage_json(
+            "--append",
+            "--reason",
+            "确认调用契约",
+            "--files",
+            "src/two.py",
+        )
 
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertTrue(payload["ok"])
+        self.assertEqual(payload["mode"], "need-files")
+        self.assertEqual(payload["round"], 1)
         feed = self.task_dir / "FEED_DROP"
         self.assertTrue((feed / "L3__src_one.py").is_file())
-        self.assertTrue((feed / "L3__src_two.py").is_file())
+        self.assertFalse((feed / "L3__src_two.py").exists())
+
+        round_dir = self.task_dir / "NEED_FILES" / "ROUND_01"
+        self.assertTrue((round_dir / "L3__src_two.py").is_file())
+        self.assertTrue((round_dir / "ROUND_MANIFEST.md").is_file())
+        round_manifest = (round_dir / "ROUND_MANIFEST.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("确认调用契约", round_manifest)
+        self.assertIn(hashlib.sha256(source.read_bytes()).hexdigest(), round_manifest)
+        manifest = (self.task_dir / "00_CONTEXT_MANIFEST.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Workflow Version: v3.1", manifest)
+        self.assertIn("Need Files Rounds: 1\n\n## Token Budget", manifest)
+        self.assertIn("## NEED_FILES Round Index", manifest)
+        self.assertIn("### ROUND_01", manifest)
+        self.assertIn("确认调用契约", manifest)
+        self.assertIn(
+            hashlib.sha256(source.read_bytes()).hexdigest(),
+            manifest,
+        )
+
+    def test_append_requires_reason(self) -> None:
+        self._write("src/one.py", "print('one')\n")
+        self.assertEqual(self.run_stage("--files", "src/one.py").returncode, 0)
+
+        result = self.run_stage("--append", "--files", "src/one.py", "--json")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("reason", json.loads(result.stdout)["error"].lower())
+        self.assertFalse((self.task_dir / "NEED_FILES").exists())
+
+    def test_reason_is_rejected_without_append(self) -> None:
+        self._write("src/one.py", "print('one')\n")
+
+        result = self.run_stage(
+            "--reason",
+            "误用参数",
+            "--files",
+            "src/one.py",
+            "--json",
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("--append", json.loads(result.stdout)["error"])
+
+    def test_append_is_append_only_across_rounds(self) -> None:
+        self._write("src/base.py", "base\n")
+        self._write("src/one.py", "one\n")
+        self._write("src/two.py", "two\n")
+        self.assertEqual(self.run_stage("--files", "src/base.py").returncode, 0)
+        self.assertEqual(
+            self.run_stage(
+                "--append",
+                "--reason",
+                "第一未知项",
+                "--files",
+                "src/one.py",
+            ).returncode,
+            0,
+        )
+        manifest_path = self.task_dir / "00_CONTEXT_MANIFEST.md"
+        first_round = manifest_path.read_text(encoding="utf-8").split(
+            "### ROUND_01", 1
+        )[1]
+
+        result, payload = self.run_stage_json(
+            "--append",
+            "--reason",
+            "第二未知项",
+            "--files",
+            "src/two.py",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(payload["round"], 2)
+        self.assertTrue(
+            (self.task_dir / "NEED_FILES" / "ROUND_02" / "L3__src_two.py").is_file()
+        )
+        manifest = manifest_path.read_text(encoding="utf-8")
+        self.assertIn(first_round.rstrip(), manifest)
+        self.assertIn("### ROUND_02", manifest)
+
+    def test_append_rejects_duplicate_content_without_creating_round(self) -> None:
+        self._write("src/one.py", "print('one')\n")
+        self.assertEqual(self.run_stage("--files", "src/one.py").returncode, 0)
+
+        result = self.run_stage(
+            "--append",
+            "--reason",
+            "重复项",
+            "--files",
+            "src/one.py",
+            "--json",
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("没有新文件", json.loads(result.stdout)["error"])
+        self.assertFalse((self.task_dir / "NEED_FILES").exists())
+
+    def test_append_rejects_v30_manifest(self) -> None:
+        self._write("src/one.py", "print('one')\n")
+        self.assertEqual(self.run_stage("--files", "src/one.py").returncode, 0)
+        manifest_path = self.task_dir / "00_CONTEXT_MANIFEST.md"
+        manifest_path.write_text(
+            manifest_path.read_text(encoding="utf-8").replace(
+                "Workflow Version: v3.1", "Workflow Version: v3.0"
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.run_stage(
+            "--append",
+            "--reason",
+            "旧任务兼容",
+            "--files",
+            "src/one.py",
+            "--json",
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("v3.1", json.loads(result.stdout)["error"])
+
+    def test_append_rejects_round_number_gap(self) -> None:
+        self._write("src/base.py", "base\n")
+        self._write("src/extra.py", "extra\n")
+        self.assertEqual(self.run_stage("--files", "src/base.py").returncode, 0)
+        (self.task_dir / "NEED_FILES" / "ROUND_02").mkdir(parents=True)
+
+        result = self.run_stage(
+            "--append",
+            "--reason",
+            "非法跳轮",
+            "--files",
+            "src/extra.py",
+            "--json",
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("连续", json.loads(result.stdout)["error"])
+
+    def test_append_rejects_flat_name_collision_without_writing_round(self) -> None:
+        self._write("src/base.py", "base\n")
+        self._write("a/b.py", "nested\n")
+        self._write("a_b.py", "flat\n")
+        self.assertEqual(self.run_stage("--files", "src/base.py").returncode, 0)
+
+        result = self.run_stage(
+            "--append",
+            "--reason",
+            "碰撞",
+            "--files",
+            "a/b.py",
+            "a_b.py",
+            "--json",
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("冲突", json.loads(result.stdout)["error"])
+        self.assertFalse((self.task_dir / "NEED_FILES").exists())
+
+    def test_append_can_stage_changed_content_as_new_round(self) -> None:
+        source = self._write("src/one.py", "print('old')\n")
+        self.assertEqual(self.run_stage("--files", "src/one.py").returncode, 0)
+        source.write_text("print('new')\n", encoding="utf-8")
+
+        result, payload = self.run_stage_json(
+            "--append",
+            "--reason",
+            "冻结快照更新",
+            "--files",
+            "src/one.py",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(payload["round"], 1)
+        staged = self.task_dir / "NEED_FILES" / "ROUND_01" / "L3__src_one.py"
+        self.assertEqual(staged.read_text(encoding="utf-8"), "print('new')\n")
+
+    def test_append_preserves_manifest_base_commit_in_result(self) -> None:
+        self._write("src/base.py", "base\n")
+        self._write("src/extra.py", "extra\n")
+        self.assertEqual(self.run_stage("--files", "src/base.py").returncode, 0)
+        manifest_path = self.task_dir / "00_CONTEXT_MANIFEST.md"
+        manifest = manifest_path.read_text(encoding="utf-8")
+        manifest = re.sub(
+            r"^- Base Commit:.*$",
+            "- Base Commit: 2026-11-16T12:00:00+08:00（可恢复副本时间）",
+            manifest,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        manifest_path.write_text(manifest, encoding="utf-8")
+
+        result, payload = self.run_stage_json(
+            "--append",
+            "--reason",
+            "保留基线",
+            "--files",
+            "src/extra.py",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            payload["base_commit"],
+            "2026-11-16T12:00:00+08:00（可恢复副本时间）",
+        )
+
+    def test_baseline_rebuild_is_rejected_after_round_exists(self) -> None:
+        self._write("src/one.py", "print('one')\n")
+        self._write("src/two.py", "print('two')\n")
+        self.assertEqual(self.run_stage("--files", "src/one.py").returncode, 0)
+        self.assertEqual(
+            self.run_stage(
+                "--append",
+                "--reason",
+                "补调用方",
+                "--files",
+                "src/two.py",
+            ).returncode,
+            0,
+        )
+
+        result = self.run_stage("--files", "src/two.py", "--json")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("基线", json.loads(result.stdout)["error"])
+        self.assertTrue(
+            (self.task_dir / "NEED_FILES" / "ROUND_01" / "L3__src_two.py").is_file()
+        )
+
+    def test_baseline_rebuild_stays_blocked_even_if_round_directory_is_missing(self) -> None:
+        self._write("src/one.py", "print('one')\n")
+        self._write("src/two.py", "print('two')\n")
+        self.assertEqual(self.run_stage("--files", "src/one.py").returncode, 0)
+        self.assertEqual(
+            self.run_stage(
+                "--append",
+                "--reason",
+                "补调用方",
+                "--files",
+                "src/two.py",
+            ).returncode,
+            0,
+        )
+        shutil.rmtree(self.task_dir / "NEED_FILES")
+
+        result = self.run_stage("--files", "src/two.py", "--json")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("基线", json.loads(result.stdout)["error"])
 
     def test_default_mode_clears_stale_staged_files(self) -> None:
         self._write("src/one.py", "print('one')\n")

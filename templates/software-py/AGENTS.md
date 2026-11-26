@@ -1,11 +1,12 @@
 # AGENTS.md — <项目名> 项目级 Agent 规范（Python）
 
-> 本文件只写本项目特有约束；角色、状态机、模型路由与通用红线以 `agent-workflow-kit/AGENTS.md` v3.0 为准。
+> 本文件只写本项目特有约束；角色、状态机、模型路由与通用红线以 `agent-workflow-kit/AGENTS.md` v3.1 为准。
 
 ## 0. 授权门
 
 - 动手写入必须有 CEO 批准的 PLAN 版本与 `APPROVAL_RECORD.md`。
-- 修改范围严格等于批准 File Scope；越界立即停止。
+- 写入必须落在批准 Write Boundaries；Forbidden、边界外、未批准删除/重命名立即停止。
+- Worker 可非敏感全仓只读检索，并在 Preflight 自动列出 Discovered Inputs 与 Planned Writes；清单不是逐文件审批闸门。
 - 未批准时只允许读仓、Preflight 和只读取材。
 - L0 可由 CEO 用三行 mini 简报直派 Worker，仍须 Diff 与验收记录。
 
@@ -19,6 +20,8 @@
 
 ```bash
 python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 --files src/app/example.py
+python scripts/stage_context.py AI_Context/TASKS/GD-2026-0001 \
+  --append --reason "<未解决未知项>" --files src/app/extra.py
 python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for planner
 python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for worker
 python scripts/validate_handover.py AI_Context/TASKS/GD-2026-0001 --for watchdog
@@ -49,12 +52,13 @@ uv run pytest
 
 | 操作 | 默认 | 必须 |
 | --- | --- | --- |
-| 读取源码 / 测试 / AI_Context | 允许 | 只读任务范围 |
-| 修改业务文件 | 禁止 | 批准 File Scope |
+| 读取源码 / 测试 / AI_Context | 允许 | 排除敏感文件；Preflight 记录 Discovered Inputs |
+| 修改业务文件 | 禁止 | 命中批准 Write Boundaries 且不在 Forbidden |
 | 新增依赖 / 改 pyproject | 禁止 | 专项批准与重审 |
 | 删除 / 重命名 | 禁止 | 逐路径批准与回滚 |
 | `.env` / 密钥 / 凭据 | 永不读取或提交 | 使用 `.env.example` 占位 |
 | Git commit / merge / push | 禁止 | CEO 明确授权；禁止默认 push |
+| Unity/GUI/Computer-Use | 不适用 | Python 任务默认禁用；确有原生 UI 时按 v3.1 专项授权 |
 
 ## 5. 技能装载
 
@@ -67,6 +71,6 @@ uv run pytest
 
 ## 6. 归档
 
-- 证据：`AI_Context/EVIDENCE/GD-YYYY-NNNN/`
+- 证据：`AI_Context/EVIDENCE/GD-YYYY-NNNN/`；优先命令、退出码、测试、Diff、Manifest、哈希和日志
 - CEO 验收：`ACCEPTANCE.md`
 - 验收后 24 小时内由 Secretary 依据 diff 起草 `CONTEXT_UPDATE_PROPOSAL.md`，CEO 审阅后合入。

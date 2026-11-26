@@ -71,7 +71,7 @@ Planner 可接受的最小规格包含：
 7. 可观察验收场景。
 8. 未验证假设与灰盒测试方法。
 
-AC 示例：
+AC 示例（每条同时声明 Class / Executor / Primary Evidence）：
 
 ```text
 AC-01: 连续两次同帧击杀只结算一次掉落。

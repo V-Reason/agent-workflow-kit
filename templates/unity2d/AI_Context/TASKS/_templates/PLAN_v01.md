@@ -1,10 +1,11 @@
-# AI ENGINEERING TASK SPECIFICATION — 工程任务书模板 v3.0（Unity 版）
+# AI ENGINEERING TASK SPECIFICATION — 工程任务书模板 v3.1（Unity 版）
 
 > 使用：复制到任务目录改名 PLAN_v01.md；Planner 填写；状态只能是 DRAFT / NEED_INVESTIGATION，
 > APPROVED 由用户审阅后亲自修改并写 APPROVAL_RECORD.md。撰写纪律见 skills/task-brief-writer。
 
 ## 0. Metadata
 Task ID: GD-YYYY-NNNN / Plan Version: v01 / Status: DRAFT
+Workflow Version: v3.1
 Task Level: L1 / Risk Level: R1
 Project: <项目名> / Engine Version: Unity 2022.3 LTS 或 Unity 6 / Platform: <目标平台>
 Branch / Base Commit: <分支 / commit；无 Git 写可恢复副本时间>
@@ -12,6 +13,8 @@ Planner: <模型> + chat 模式 + high 档位建议（L2 改 xhigh）
 Worker: <模型> + agent 模式
 Watchdog: <独立会话/实例 + 模型 + 档位>
 Context Manifest: 00_CONTEXT_MANIFEST.md + Base Commit <哈希或恢复时间>
+Computer-Use Authorization: NONE
+<!-- 如需授权：AUTHORIZED: TARGET=<窗口/应用>; ACTIONS=<动作白名单>; SCOPE=<目录/场景范围> -->
 Execution Attempt Cap: A01-A03
 Created At: <YYYY-MM-DD HH:MM 时区> / Approved By: <留空> / Approved At: <留空>
 
@@ -35,12 +38,24 @@ Created At: <YYYY-MM-DD HH:MM 时区> / Approved By: <留空> / Approved At: <�
 <架构、职责、数据流、接口；备选方案与取舍理由；公共接口与 asmdef/序列化变更必须在此披露>
 
 ## 6. File Scope
-- READ: <路径>
-- CREATE: <路径（仅 .cs/.asmdef 等文本文件）>
-- MODIFY: <路径>
-- FORBIDDEN: <.prefab/.unity/.asset/.meta/.xlsx 资产、ProjectSettings、Packages/manifest.json、渲染管线配置>
-- 用户手工清单：<Agent 不碰、由用户在编辑器完成的项（每条含路径、期望值、判据）>
-- 需重审条件：<出现哪些情况必须升版>
+### Write Boundaries
+- MODIFY `<Unity 文本路径或目录模式，例如 Assets/Scripts/Gameplay/**>`
+- CREATE `<Unity 文本路径或目录模式>`
+### Forbidden
+- `*.prefab`
+- `*.unity`
+- `*.asset`
+- `*.meta`
+- `*.xlsx`
+- `ProjectSettings/**`
+- `Packages/manifest.json`
+### Read Policy
+- REPO_READ_ONLY_EXCEPT_SENSITIVE
+### Protected Changes
+- 新增 asmdef、改 references、依赖、ProjectSettings、渲染管线、序列化定义、删除资产必须停止并升版重审
+
+> Unity Editor、游戏启动、Inspector 和最终视觉观察默认属于 `UNITY_GUI_REQUIRED`，由 CEO 执行。
+> 只有本 PLAN 与批准记录同时列明目标、动作和范围时，Worker 才可使用 Computer-Use。
 
 ## 7. Execution Steps
 | # | 前置条件 | 路径/位置 | 操作 | 预期结果 | 检查方式 |
@@ -52,15 +67,18 @@ Created At: <YYYY-MM-DD HH:MM 时区> / Approved By: <留空> / Approved At: <�
   NonAlloc 检测、Editor 隔离、序列化兼容；明确禁止的实现方式
 
 ## 9. Acceptance Criteria
-- AC-01: <可判定 PASS / FAIL / NOT RUN 的条目>
-- AC-02: <...>
+| AC | Class | Executor | Criterion | Primary Evidence |
+| --- | --- | --- | --- | --- |
+| AC-01 | WORKER_AUTOMATABLE | WORKER | <批处理审计/编译/测试结果> | <COMMAND+EXIT_CODE+LOG> |
+| AC-02 | UNITY_GUI_REQUIRED | CEO | <Test Runner 或场景观察结果> | <OBSERVATION / SCREENSHOT / VIDEO> |
+| AC-03 | CEO_MANUAL_ACCEPTANCE | CEO | <最终体验判断> | <OBSERVATION> |
 
 ## 10. Test Plan
-- 编译：Unity 打开工程后 Console 0 error（记录 Unity 版本）
-- EditMode 测试：Window > General > Test Runner > EditMode > Run All（记录通过数）
-- 结构审计：GAMEDEV > 审计 > 项目结构审计（FAIL = 0）
-- 运行时视觉：<需要用户在编辑器实跑的场景与观察点，或 NOT RUN>
-- 性能：<Profiler 采样点与预算，或 NOT APPLICABLE>
+| AC | Command / Action | CWD | Expected |
+| --- | --- | --- | --- |
+| AC-01 | `UnityEditor -batchmode ... RunBatchAudit` | <ProjectRoot> | exit 0，FAIL = 0 |
+| AC-02 | Window > General > Test Runner > EditMode > Run All | Editor | 全绿，记录通过数 |
+| AC-03 | <CEO 场景实跑与观察点> | <场景> | <期望结果> |
 
 ## 11. Risks
 | 风险 | 影响 | 概率 | 缓解 |
@@ -78,4 +96,4 @@ Created At: <YYYY-MM-DD HH:MM 时区> / Approved By: <留空> / Approved At: <�
 
 ## 14. Approval
 - Decision: PENDING
-- 批准后填写：Plan Version: v01 / Approved Scope: <逐条路径与操作> / Conditions: <附加约束> / Explicitly Forbidden: <明确禁止项> / Approved By: <批准人> / Approved At: <时间含时区>
+- 批准后填写：Plan Version: v01 / Approved Write Boundaries / Explicitly Forbidden / Computer-Use Authorization / Conditions / Approved By / Approved At

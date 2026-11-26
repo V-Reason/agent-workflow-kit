@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Stage real project files into a deterministic FEED_DROP context bundle."""
+"""Stage v3.1 FEED_DROP baselines and append-only NEED_FILES rounds."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -17,9 +18,12 @@ from datetime import datetime
 from pathlib import Path
 
 TASK_DIR_PATTERN = re.compile(r"^GD-\d{4}-\d{4}$")
+ROUND_DIR_PATTERN = re.compile(r"^ROUND_(\d{2})$")
+WORKFLOW_VERSION = "v3.1"
 MANIFEST_ENTRY_RE = re.compile(
     r"^\|\s*`(?P<staged>[^`]+)`\s*\|\s*(?P<layer>L[123])\s*\|"
-    r"\s*`(?P<source>[^`]+)`\s*\|\s*(?P<tokens>\d+)\s*\|$"
+    r"\s*`(?P<source>[^`]+)`\s*\|\s*(?P<tokens>\d+)\s*\|"
+    r"\s*(?P<sha256>[0-9a-f]{64})\s*\|$"
 )
 CHAT_SAFE_SUFFIXES = {
     ".c",
@@ -43,6 +47,7 @@ TREE_EXCLUDED_NAMES = {
     ".venv",
     "__pycache__",
     "FEED_DROP",
+    "NEED_FILES",
     "Library",
     "Logs",
     "Temp",
@@ -70,6 +75,7 @@ class StagedFile:
     source: str
     source_path: Path
     tokens: int
+    sha256: str
 
     def to_json(self) -> dict[str, str | int]:
         return {
@@ -77,7 +83,17 @@ class StagedFile:
             "layer": self.layer,
             "source": self.source,
             "tokens": self.tokens,
+            "sha256": self.sha256,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class ManifestEntry:
+    staged: str
+    layer: str
+    source: str
+    tokens: int
+    sha256: str
 
 
 AUTO_FILES = (
@@ -180,6 +196,14 @@ def _estimate_tokens(path: Path) -> int:
     return _estimate_tokens_text(path.read_text(encoding="utf-8", errors="replace"))
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _read_source_list(path_argument: str) -> list[str]:
     path = Path(path_argument).resolve()
     if not path.is_file():
@@ -192,16 +216,90 @@ def _read_source_list(path_argument: str) -> list[str]:
     return entries
 
 
-def _manifest_sources(manifest: Path) -> list[str]:
+def _manifest_entries(manifest: Path) -> list[ManifestEntry]:
     text = manifest.read_text(encoding="utf-8")
-    sources: list[str] = []
+    entries: list[ManifestEntry] = []
     for line in text.splitlines():
         match = MANIFEST_ENTRY_RE.match(line)
         if match:
-            sources.append(match.group("source"))
-    if not sources:
-        raise StageError(f"--append 无法从现有清单解析任何文件映射：{manifest}")
-    return sources
+            entries.append(
+                ManifestEntry(
+                    staged=match.group("staged"),
+                    layer=match.group("layer"),
+                    source=match.group("source"),
+                    tokens=int(match.group("tokens")),
+                    sha256=match.group("sha256"),
+                )
+            )
+    return entries
+
+
+def _require_v31_manifest(manifest: Path) -> str:
+    if not manifest.is_file():
+        raise StageError("--append 要求现有的 00_CONTEXT_MANIFEST.md")
+    text = manifest.read_text(encoding="utf-8")
+    version_match = re.search(r"^- Workflow Version:\s*(\S+)\s*$", text, re.MULTILINE)
+    if version_match is None or version_match.group(1) != WORKFLOW_VERSION:
+        raise StageError(
+            f"--append 要求 Workflow Version {WORKFLOW_VERSION} 的任务清单；"
+            "v3.0 任务包必须按迁移说明重建"
+        )
+    return text
+
+
+def _round_directories(task_dir: Path) -> list[tuple[int, Path]]:
+    root = task_dir / "NEED_FILES"
+    if not root.exists():
+        return []
+    if root.is_symlink() or not root.is_dir():
+        raise StageError(f"NEED_FILES 必须是普通目录：{root}")
+    rounds: list[tuple[int, Path]] = []
+    for child in root.iterdir():
+        if not child.is_dir():
+            raise StageError(f"NEED_FILES 只能包含 ROUND_NN 目录：{child.name}")
+        match = ROUND_DIR_PATTERN.fullmatch(child.name)
+        if match is None:
+            raise StageError(f"非法补料轮目录：{child.name}")
+        if child.is_symlink():
+            raise StageError(f"拒绝符号链接补料目录：{child}")
+        rounds.append((int(match.group(1)), child))
+    rounds.sort()
+    expected = list(range(1, len(rounds) + 1))
+    actual = [number for number, _ in rounds]
+    if actual != expected:
+        raise StageError(f"补料轮次必须从 ROUND_01 连续编号，当前为 {actual}")
+    return rounds
+
+
+def _git_head(root: Path) -> str:
+    result = _run_git(root, "rev-parse", "HEAD")
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip()
+    return "NO_GIT_HEAD"
+
+
+def _manifest_round_count(manifest: Path) -> int:
+    text = manifest.read_text(encoding="utf-8")
+    version_match = re.search(r"^- Workflow Version:\s*(\S+)\s*$", text, re.MULTILINE)
+    if version_match is None or version_match.group(1) != WORKFLOW_VERSION:
+        raise StageError(
+            f"检测到非 {WORKFLOW_VERSION} 任务清单；请按迁移说明新建或重建任务包"
+        )
+    count_match = re.search(
+        r"^- Need Files Rounds:[ \t]*(\d+)[ \t]*$",
+        text,
+        re.MULTILINE,
+    )
+    if count_match is None:
+        raise StageError("现有 Manifest 缺少 Need Files Rounds 字段")
+    return int(count_match.group(1))
+
+
+def _manifest_base_commit(text: str) -> str:
+    match = re.search(r"^- Base Commit:\s*(.+?)\s*$", text, re.MULTILINE)
+    if match is None or not match.group(1).strip():
+        raise StageError("现有 Manifest 缺少 Base Commit")
+    return match.group(1).strip()
 
 
 def _run_git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -315,12 +413,14 @@ def _manifest_text(
     lines = [
         f"# 00 CONTEXT MANIFEST — {task_id}",
         "",
+        f"- Workflow Version: {WORKFLOW_VERSION}",
         f"- Task ID: {task_id}",
         f"- Base Commit: {base_commit}",
-        f"- Generated At: {generated_at}",
-        f"- Generation Mode: {mode}",
+        f"- Baseline Generated At: {generated_at}",
+        f"- Baseline Generation Mode: {mode}",
         f"- Chat Safe: {'ON' if chat_safe else 'OFF'}",
         f"- Budget Limit: {budget_limit}",
+        "- Need Files Rounds: 0",
         "",
         "## Token Budget",
         "",
@@ -335,12 +435,13 @@ def _manifest_text(
         "",
         "## File Mapping",
         "",
-        "| 暂存名 | 层级 | 原路径 | 估算 Token |",
-        "| --- | --- | --- | ---: |",
+        "| 暂存名 | 层级 | 原路径 | 估算 Token | SHA-256 |",
+        "| --- | --- | --- | ---: | --- |",
     ]
     for item in files:
         lines.append(
-            f"| `{item.staged}` | {item.layer} | `{item.source}` | {item.tokens} |"
+            f"| `{item.staged}` | {item.layer} | `{item.source}` | "
+            f"{item.tokens} | {item.sha256} |"
         )
     lines.extend(
         [
@@ -358,7 +459,7 @@ def _manifest_text(
             "## Explicit Exclusions",
             "",
             "- `.git/`、`.venv/`、各类缓存、`Library/`、`Temp/`、`Logs/`、`logs/`、`tmp/`",
-            "- 所有 `FEED_DROP/` 物理投喂箱及本 Manifest 自身",
+            "- 所有 `FEED_DROP/`、`NEED_FILES/` 物理投喂箱及本 Manifest 自身",
             "- 未通过 `--files` / `--from-list` 选择的业务文件",
             "- `.env`、`.env.*`（`.env.example` 除外）、`*.key`、`*.pem` 与名称含 secret/credential 的文件",
         ]
@@ -366,7 +467,312 @@ def _manifest_text(
     if warnings:
         lines.extend(["", "## Warnings", ""])
         lines.extend(f"- {warning}" for warning in warnings)
+    lines.extend(["", "## NEED_FILES Round Index"])
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _round_section_text(
+    *,
+    round_number: int,
+    created_at: str,
+    reason: str,
+    source_commit: str,
+    files: list[StagedFile],
+) -> str:
+    lines = [
+        f"### ROUND_{round_number:02d}",
+        "",
+        f"- Created At: {created_at}",
+        f"- Reason: {reason}",
+        f"- Source Commit: {source_commit}",
+        f"- Round Manifest: `NEED_FILES/ROUND_{round_number:02d}/ROUND_MANIFEST.md`",
+        "",
+        "| 暂存名 | 层级 | 原路径 | 估算 Token | SHA-256 |",
+        "| --- | --- | --- | ---: | --- |",
+    ]
+    for item in files:
+        lines.append(
+            f"| `{item.staged}` | {item.layer} | `{item.source}` | "
+            f"{item.tokens} | {item.sha256} |"
+        )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _round_manifest_text(
+    *,
+    task_id: str,
+    round_number: int,
+    created_at: str,
+    reason: str,
+    source_commit: str,
+    chat_safe: bool,
+    files: list[StagedFile],
+) -> str:
+    lines = [
+        f"# NEED_FILES ROUND_{round_number:02d} — {task_id}\n\n"
+        f"- Workflow Version: {WORKFLOW_VERSION}\n"
+        f"- Task ID: {task_id}\n"
+        f"- Created At: {created_at}\n"
+        f"- Reason: {reason}\n"
+        f"- Source Commit: {source_commit}\n"
+        f"- Chat Safe: {'ON' if chat_safe else 'OFF'}\n\n"
+        "> 本轮只收录直接决定设计或验收的必需文件；候选文件不进入补料目录。",
+        "",
+        "| 暂存名 | 层级 | 原路径 | 估算 Token | SHA-256 |",
+        "| --- | --- | --- | ---: | --- |",
+    ]
+    for item in files:
+        lines.append(
+            f"| `{item.staged}` | {item.layer} | `{item.source}` | "
+            f"{item.tokens} | {item.sha256} |"
+        )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _updated_manifest_text(
+    existing: str,
+    *,
+    round_number: int,
+    round_section: str,
+    new_files: list[StagedFile],
+) -> str:
+    entries = _manifest_entries_from_text(existing)
+    all_entries = entries + [
+        ManifestEntry(
+            staged=item.staged,
+            layer=item.layer,
+            source=item.source,
+            tokens=item.tokens,
+            sha256=item.sha256,
+        )
+        for item in new_files
+    ]
+    totals = {
+        layer: sum(entry.tokens for entry in all_entries if entry.layer == layer)
+        for layer in ("L1", "L2", "L3")
+    }
+    total = sum(totals.values())
+    budget_match = re.search(r"^- Budget Limit:\s*(\d+)\s*$", existing, re.MULTILINE)
+    budget_limit = int(budget_match.group(1)) if budget_match else 150000
+
+    updated = re.sub(
+        r"^- Need Files Rounds:[ \t]*\d+[ \t]*$",
+        f"- Need Files Rounds: {round_number}",
+        existing,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    budget_rows = {
+        "L1": f"| L1 | {totals['L1']} | 基线固定层；含累计统计 |",
+        "L2": f"| L2 | {totals['L2']} | 模块层；含累计统计 |",
+        "L3": f"| L3 | {totals['L3']} | 基线 + {round_number} 轮补料 |",
+        "Total": (
+            f"| Total | {total} | "
+            f"{'超过' if total > budget_limit else '未超过'} {budget_limit} |"
+        ),
+    }
+    for layer, replacement in budget_rows.items():
+        updated = re.sub(
+            rf"^\| {layer} \| \d+ \|.*$",
+            replacement,
+            updated,
+            count=1,
+            flags=re.MULTILINE,
+        )
+    marker = "## NEED_FILES Round Index"
+    if marker not in updated:
+        raise StageError("现有 Manifest 缺少 NEED_FILES Round Index 段")
+    return updated.rstrip() + "\n\n" + round_section.rstrip() + "\n"
+
+
+def _manifest_entries_from_text(text: str) -> list[ManifestEntry]:
+    entries: list[ManifestEntry] = []
+    for line in text.splitlines():
+        match = MANIFEST_ENTRY_RE.match(line)
+        if match:
+            entries.append(
+                ManifestEntry(
+                    staged=match.group("staged"),
+                    layer=match.group("layer"),
+                    source=match.group("source"),
+                    tokens=int(match.group("tokens")),
+                    sha256=match.group("sha256"),
+                )
+            )
+    return entries
+
+
+def _stage_round(
+    *,
+    task_dir: Path,
+    root: Path,
+    files: list[str],
+    from_list: str | None,
+    reason: str | None,
+    chat_safe: bool,
+    budget_limit: int,
+) -> tuple[dict[str, object], list[str]]:
+    reason_value = (reason or "").strip()
+    if not reason_value:
+        raise StageError("--append 必须用 --reason 说明本轮直接解决的未知项")
+    manifest_path = task_dir / "00_CONTEXT_MANIFEST.md"
+    existing_manifest = _require_v31_manifest(manifest_path)
+    base_commit = _manifest_base_commit(existing_manifest)
+    feed_drop = task_dir / "FEED_DROP"
+    if not feed_drop.is_dir() or not any(path.is_file() for path in feed_drop.iterdir()):
+        raise StageError("--append 要求现有的非空 FEED_DROP 基线")
+
+    selected = list(files)
+    if from_list:
+        selected.extend(_read_source_list(from_list))
+    if not selected:
+        raise StageError("--append 至少需要一个 --files 或 --from-list 条目")
+
+    existing_entries = _manifest_entries_from_text(existing_manifest)
+    known_hashes = {(entry.source, entry.sha256) for entry in existing_entries}
+    added_specs: list[tuple[str, str, Path, int, str]] = []
+    duplicates: list[str] = []
+    seen_staged: dict[str, str] = {}
+    for raw in sorted(set(selected)):
+        resolved, relative = _resolve_source(root, raw)
+        digest = _sha256(resolved)
+        if (relative, digest) in known_hashes:
+            duplicates.append(relative)
+            continue
+        staged_name = _manual_staged_name(relative, chat_safe)
+        prior_source = seen_staged.get(staged_name)
+        if prior_source is not None and prior_source != relative:
+            raise StageError(f"扁平化暂存名冲突：{staged_name}")
+        seen_staged[staged_name] = relative
+        added_specs.append(
+            (
+                staged_name,
+                "L3",
+                resolved,
+                _estimate_tokens(resolved),
+                digest,
+            )
+        )
+    if not added_specs:
+        raise StageError("本轮没有新文件；重复内容已全部跳过")
+
+    rounds = _round_directories(task_dir)
+    declared_rounds = _manifest_round_count(manifest_path)
+    if declared_rounds != len(rounds):
+        raise StageError(
+            f"Manifest 轮次数 {declared_rounds} 与目录数 {len(rounds)} 不一致；拒绝追加"
+        )
+    round_number = len(rounds) + 1
+    if round_number > 99:
+        raise StageError("补料轮次超过 ROUND_99，请拆分任务")
+    need_files = task_dir / "NEED_FILES"
+    need_files.mkdir(exist_ok=True)
+    round_dir = need_files / f"ROUND_{round_number:02d}"
+    if round_dir.exists():
+        raise StageError(f"补料轮目录已存在：{round_dir.name}")
+
+    created_at = _now()
+    source_commit = _git_head(root)
+    warnings: list[str] = []
+    staged_files: list[StagedFile] = []
+    temporary_round = Path(tempfile.mkdtemp(prefix=f".ROUND_{round_number:02d}_", dir=need_files))
+    manifest_written = False
+    try:
+        for staged_name, layer, source_path, tokens, digest in added_specs:
+            target = temporary_round / staged_name
+            shutil.copyfile(source_path, target)
+            staged_files.append(
+                StagedFile(
+                    staged=staged_name,
+                    layer=layer,
+                    source=source_path.relative_to(root).as_posix(),
+                    source_path=source_path,
+                    tokens=tokens,
+                    sha256=digest,
+                )
+            )
+        round_manifest = _round_manifest_text(
+            task_id=task_dir.name,
+            round_number=round_number,
+            created_at=created_at,
+            reason=reason_value,
+            source_commit=source_commit,
+            chat_safe=chat_safe,
+            files=staged_files,
+        )
+        (temporary_round / "ROUND_MANIFEST.md").write_text(
+            round_manifest, encoding="utf-8"
+        )
+        temporary_round.replace(round_dir)
+        temporary_round = None
+
+        round_section = _round_section_text(
+            round_number=round_number,
+            created_at=created_at,
+            reason=reason_value,
+            source_commit=source_commit,
+            files=staged_files,
+        )
+        updated_manifest = _updated_manifest_text(
+            existing_manifest,
+            round_number=round_number,
+            round_section=round_section,
+            new_files=staged_files,
+        )
+        temporary_manifest = task_dir / ".00_CONTEXT_MANIFEST.md.tmp"
+        temporary_manifest.write_text(updated_manifest, encoding="utf-8")
+        temporary_manifest.replace(manifest_path)
+        manifest_written = True
+
+        all_entries = existing_entries + [
+            ManifestEntry(
+                staged=item.staged,
+                layer=item.layer,
+                source=item.source,
+                tokens=item.tokens,
+                sha256=item.sha256,
+            )
+            for item in staged_files
+        ]
+        totals = {
+            "L1": sum(entry.tokens for entry in all_entries if entry.layer == "L1"),
+            "L2": sum(entry.tokens for entry in all_entries if entry.layer == "L2"),
+            "L3": sum(entry.tokens for entry in all_entries if entry.layer == "L3"),
+        }
+        totals["Total"] = totals["L1"] + totals["L2"] + totals["L3"]
+        if totals["Total"] > budget_limit:
+            warnings.append(
+                f"上下文预算警告：累计 Total {totals['Total']} 超过限制 {budget_limit}。"
+            )
+    except Exception:
+        if not manifest_written and round_dir.exists():
+            shutil.rmtree(round_dir)
+        raise
+    finally:
+        if temporary_round is not None and temporary_round.exists():
+            shutil.rmtree(temporary_round)
+
+    result: dict[str, object] = {
+        "ok": True,
+        "task_id": task_dir.name,
+        "base_commit": base_commit,
+        "mode": "need-files",
+        "round": round_number,
+        "manifest": manifest_path.relative_to(root).as_posix(),
+        "round_manifest": (round_dir / "ROUND_MANIFEST.md").relative_to(root).as_posix(),
+        "feed_drop": feed_drop.relative_to(root).as_posix(),
+        "files": [item.to_json() for item in staged_files],
+        "duplicates": duplicates,
+        "tokens": {
+            "l1": totals["L1"],
+            "l2": totals["L2"],
+            "l3": totals["L3"],
+            "total": totals["Total"],
+        },
+        "warnings": warnings,
+        "error": None,
+    }
+    return result, warnings
 
 
 def stage(
@@ -375,28 +781,39 @@ def stage(
     files: list[str],
     from_list: str | None,
     append: bool,
+    reason: str | None,
     chat_safe: bool,
     git_diff: int,
     budget_limit: int,
 ) -> tuple[dict[str, object], list[str]]:
+    if reason is not None and not append:
+        raise StageError("--reason 只能配合 --append 使用")
     task_input = Path(task_dir_arg)
     root = _find_project_root(task_input)
     task_dir = _validate_task_dir(task_input, root)
     task_dir.mkdir(parents=True, exist_ok=True)
-    feed_drop = task_dir / "FEED_DROP"
+    if append:
+        return _stage_round(
+            task_dir=task_dir,
+            root=root,
+            files=files,
+            from_list=from_list,
+            reason=reason,
+            chat_safe=chat_safe,
+            budget_limit=budget_limit,
+        )
     manifest_path = task_dir / "00_CONTEXT_MANIFEST.md"
+    manifest_rounds = (
+        _manifest_round_count(manifest_path) if manifest_path.is_file() else 0
+    )
+    if _round_directories(task_dir) or manifest_rounds > 0:
+        raise StageError("已有 NEED_FILES 补料轮，禁止重建基线；请新建任务或使用 --append")
+
+    feed_drop = task_dir / "FEED_DROP"
 
     selected = list(files)
     if from_list:
         selected.extend(_read_source_list(from_list))
-    if append:
-        if not manifest_path.is_file():
-            raise StageError("--append 要求现有的 00_CONTEXT_MANIFEST.md")
-        selected.extend(
-            source
-            for source in _manifest_sources(manifest_path)
-            if source != "git:recent"
-        )
 
     warnings: list[str] = []
     generated_at = _now()
@@ -452,6 +869,7 @@ def stage(
                     source=relative_source,
                     source_path=source_path,
                     tokens=_estimate_tokens(target),
+                    sha256=_sha256(target),
                 )
             )
 
@@ -467,6 +885,7 @@ def stage(
                     source="git:recent",
                     source_path=recent_path,
                     tokens=_estimate_tokens(recent_path),
+                    sha256=_sha256(recent_path),
                 )
             )
 
@@ -487,7 +906,7 @@ def stage(
             generated_at=generated_at,
             base_commit=base_commit,
             chat_safe=chat_safe,
-            mode="append" if append else "rebuild",
+            mode="baseline",
             files=staged_files,
             totals=totals,
             budget_limit=budget_limit,
@@ -507,9 +926,13 @@ def stage(
         "ok": True,
         "task_id": task_dir.name,
         "base_commit": base_commit,
+        "mode": "baseline",
+        "round": None,
         "manifest": manifest_path.relative_to(root).as_posix(),
+        "round_manifest": None,
         "feed_drop": feed_drop.relative_to(root).as_posix(),
         "files": [item.to_json() for item in staged_files],
+        "duplicates": [],
         "tokens": {
             "l1": totals["L1"],
             "l2": totals["L2"],
@@ -537,11 +960,21 @@ def _non_negative_int(value: str) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="生成 AI_Context 物理源文件投喂箱")
+    parser = argparse.ArgumentParser(
+        description="生成 v3.1 FEED_DROP 基线与 append-only NEED_FILES 补料轮"
+    )
     parser.add_argument("task_dir", help="任务目录，如 AI_Context/TASKS/GD-2026-0001")
     parser.add_argument("--files", nargs="+", default=[], help="相对项目根加入的 L3 源文件")
     parser.add_argument("--from-list", help="从文本清单批量读取源文件（相对当前目录）")
-    parser.add_argument("--append", action="store_true", help="合并现有 Manifest 与 FEED_DROP")
+    parser.add_argument(
+        "--append",
+        action="store_true",
+        help="创建下一个 NEED_FILES/ROUND_NN 增量补料轮（不修改 FEED_DROP）",
+    )
+    parser.add_argument(
+        "--reason",
+        help="配合 --append 使用，记录本轮直接解决的未知项或验收问题",
+    )
     parser.add_argument(
         "--no-chat-safe",
         action="store_true",
@@ -574,6 +1007,7 @@ def main(argv: list[str] | None = None) -> int:
             files=args.files,
             from_list=args.from_list,
             append=args.append,
+            reason=args.reason,
             chat_safe=not args.no_chat_safe,
             git_diff=args.git_diff,
             budget_limit=args.budget_limit,
@@ -586,9 +1020,13 @@ def main(argv: list[str] | None = None) -> int:
                         "ok": False,
                         "task_id": Path(args.task_dir).name,
                         "base_commit": None,
+                        "mode": "need-files" if args.append else "baseline",
+                        "round": None,
                         "manifest": None,
+                        "round_manifest": None,
                         "feed_drop": None,
                         "files": [],
+                        "duplicates": [],
                         "tokens": {"l1": 0, "l2": 0, "l3": 0, "total": 0},
                         "warnings": [],
                         "error": str(exc),

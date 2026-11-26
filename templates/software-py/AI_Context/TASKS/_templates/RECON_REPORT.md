@@ -35,5 +35,7 @@ MODULE_MAP 核验：<一致 / 漂移>（漂移文件与现状逐条列出）
 命令、搜索关键词与输出位置：
 - <命令 / 关键词 → EVIDENCE 路径>
 
-去向：由 Secretary 用 `stage_context.py --append` 补拷并更新 Manifest → 回 PLANNING / 原阶段。
+去向：Chat Planner 缺文件时由 Secretary 运行
+`stage_context.py --append --reason "<未解决未知项>" --files <paths>` 创建下一个
+`NEED_FILES/ROUND_NN/`；Agent Planner 可直接只读检索仓库，仅在仓库外材料、敏感边界或冻结快照时升级。随后回 PLANNING / 原阶段。
 本报告不构成执行授权，不得包含任何项目文件修改。

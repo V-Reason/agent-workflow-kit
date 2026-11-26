@@ -3,6 +3,7 @@
 > 使用：复制本文件到 `AI_Context/TASKS/GD-YYYY-NNNN/TASK_BRIEF.md`，逐段填写；<> 为占位。
 
 Task ID: GD-YYYY-NNNN
+Workflow Version: v3.1
 Project / Engine / Tool Version: <项目名 / Python 3.12 / uv>
 
 Task Level: L0-L3（初判）    Risk Level: R0-R3（初判）
@@ -14,7 +15,7 @@ Task Level: L0-L3（初判）    Risk Level: R0-R3（初判）
    <动机与上下文>
 
 3. 当前行为与问题（Current Behavior / Problem）
-   <现状描述；附报错、日志或截图位置>
+   <现状描述；优先附命令、退出码、日志或 Diff 位置；仅视觉问题再附最小截图>
 
 4. 期望行为（Expected Behavior）
    <期望的具体行为与边界>
@@ -28,8 +29,8 @@ Task Level: L0-L3（初判）    Risk Level: R0-R3（初判）
 7. 相关模块与文件（若已知，标注证据状态）
    - <路径>（VERIFIED / OBSERVED / INFERRED）
 
-8. 已观察到的错误、截图或日志
-   <日志位置或 EVIDENCE 路径>
+8. 已观察到的错误与机器证据
+   <命令、退出码、日志或 EVIDENCE 路径；视觉项写观察目的/场景/期望>
 
 9. 验收方式（我如何判断完成）
    <可判定的通过条件，引用 BUILD_AND_TEST.md 登记过的命令>

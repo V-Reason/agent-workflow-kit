@@ -89,7 +89,7 @@ tests/
 2. 架构选择及取舍。
 3. 接口与数据流建议。
 4. 必须保持的不变量。
-5. 文件范围建议。
+5. Write Boundaries、Forbidden、Read Policy 与 Protected Changes 建议。
 6. 测试与验收矩阵。
 7. 风险、回滚条件与待补文件。
 

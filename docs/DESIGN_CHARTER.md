@@ -1,4 +1,4 @@
-# `agent-workflow-kit` 设计总纲（v3.0）
+# `agent-workflow-kit` 设计总纲（v3.1）
 > **副标题**：面向游戏与软件工程的“CEO + Super-Agent”四角色正交协作系统 · 需求分析与架构指导书  
 > **定位**：`agent-workflow-kit` 迭代重构的最高产品需求文档（PRD）与架构宪法  
 > **适用域**：Unity / Unreal / Shader / DCC 工具 / Python 通用工程  
@@ -75,7 +75,7 @@
 | :------------------------------------ | :------------------------------------------------------ | :----------------------------------------------------------- | :----------------------------------------------------------- | :----------------------------------------------------------- |
 | **Secretary**<br>（项目秘书）         | 全局调度台、工程进度管家、上下文“备菜员”                | **Agent 模式**（读仓+调打包脚本）<br>轻量快模型（低延迟、低成本） | 只读全仓 + 运行 `stage_context.py`；仅可写 `PROJECT_BOARD.md`、台账与 `TASKS/` 下的辅助包 | **严禁写业务代码/改配置资产**；<br>**严禁越权替代大脑做架构决策**（只提供“候选上下文”，完整分析权属于 Planner）；<br>每次最多向 CEO 提 1 个具体问题 |
 | **Planner**<br>（架构大脑）           | 首席软件/游戏架构师，掌握**完整项目分析权**与方案拆解权 | **形态自由（Chat 拖拽 或 Agent 直读）**<br>强推理旗舰（L1 `high` / L2 `xhigh`），可叠加专业顾问技能 | Chat 模式：读投喂文件；Agent 模式：读 `FEED_DROP/` + 全仓只读检索。仅产出 `PLAN_vNN.md`（草案） | 不修改任何业务文件；不批准自己的计划；不把推断写成事实       |
-| **Worker**<br>（施工员，原 Executor） | 专注单一任务的隔离工程实施者                            | **Agent 模式 + 完整本地工具链**<br>高性价比强编码模型（长任务走错峰半价） | 在独立 Git 分支（`ai/GD-YYYY-NNNN`）内读写 `APPROVED` 白名单文件、跑编译与测试命令 | **不再兼职备菜/摸底/维护全局台账**；不直接响应未批准的口头加需求；不触碰 `FORBIDDEN` 与用户未提交修改 |
+| **Worker**<br>（施工员，原 Executor） | 专注单一任务的隔离工程实施者                            | **Agent 模式 + 完整本地工具链**<br>高性价比强编码模型（长任务走错峰半价） | 在批准 Write Boundaries 内自主读取、发现并修改相关文件，跑 CLI/编译/测试；Preflight 自动记录 Discovered Inputs 与 Planned Writes | **不兼职备菜/台账**；不直接响应口头加需求；不命中 `FORBIDDEN`、不越边界、不默认 GUI/Computer-Use |
 | **Watchdog**<br>（独立监察员）        | 主链路之外的**客观裁判 + 软故障免疫系统**               | **独立会话 / 独立模型实例**<br>稳定中/强模型（L0 免开独立会话，L1/L2 必开） | 只读代码与 `git diff` + 实跑门禁命令 + 写 `ACCEPTANCE.md` 事实部分与复盘提案 | **只判不修，绝不亲自改代码凑通过**；禁止 Worker 自证；不替 CEO 签最终 `ACCEPT` |
 
 ---
@@ -97,9 +97,9 @@
 3. **配套内联索引（`00_CONTEXT_MANIFEST.md`）**：
    借鉴 Super-agent 的 **Inline & Spill** 思想：记录当前仓库 `Base Commit`（或无 Git 恢复时间）、文件映射表（暂存名 ↔ 原路径）、选中理由、估算 Token 总量（超过 150K 触发拆分警告）、全仓目录树概览以及“明确未放入的大目录清单”。
 4. **大脑的反向补料权（保障完整分析权）**：
-   由于 Secretary 只做快速初筛，若 Planner 审阅后认为缺少某个依赖文件，Chat 模式下直接输出点名清单（`NEED_FILES`）交由 Secretary 用 `stage_context.py --append` 一键补齐；Agent 模式下大脑自行读仓补全。
+   由于 Secretary 只做快速初筛，Chat Planner 若缺少直接决定设计或验收的文件，输出最小 `NEED_FILES` 并由 Secretary 用 `stage_context.py --append --reason` 创建下一个 `NEED_FILES/ROUND_NN/`；Agent Planner 默认自行只读检索仓库，只在仓库外、敏感边界或冻结快照异常时升级。
 5. **零污染工程隔离（硬性要求）**：
-   * `.gitignore` 必须强制忽略 `AI_Context/TASKS/**/FEED_DROP/`，确保暂存文件绝不入库、不污染 `git status`；
+   * `.gitignore` 必须强制忽略 `AI_Context/TASKS/**/FEED_DROP/` 与 `AI_Context/TASKS/**/NEED_FILES/`，确保暂存文件绝不入库、不污染 `git status`；
    * `templates/software-py/pyproject.toml` 中的 `ruff`、`mypy`、`pytest` 必须显式配置排除 `AI_Context/`，防止工具链扫描暂存箱里的 `.py` 副本引发误报；
    * Unity 模板因 `AI_Context/` 位于 `Assets/` 外，天然不触发 Unity 编译。
 
@@ -157,7 +157,7 @@ agent-workflow-kit/
 ├── AGENTS.md                        # 全套件宪法（唯一模型路由表、四角色矩阵、状态机与红线）
 ├── README.md                        # 极速导览
 ├── docs/
-│   ├── DESIGN_CHARTER.md            # 【本文件】v3.0 设计总纲与需求分析案
+│   ├── DESIGN_CHARTER.md            # 【本文件】v3.1 设计总纲与需求分析案
 │   └── USAGE.md                     # 操作手册（Secretary/CEO/Brain/Worker/Watchdog 实操走读）
 ├── scripts/
 │   ├── stage_context.py             # 【新增】物理源文件投喂箱打包脚本（L1__/L2__/L3__ + 清单 + 估算）
@@ -206,7 +206,7 @@ agent-workflow-kit/
 
 ---
 
-## 6. 套件 v3.0 迭代开发路线（Implementation Roadmap）
+## 6. 套件 v3.0 基础迭代路线（Implementation Roadmap）
 
 为确保重构过程本身严守“小步、可验证、可回滚”原则，建议将本《设计总纲》拆分为 **两批顺序推进的工程任务**（由我后续为你生成具体可执行任务书）：
 
@@ -223,3 +223,16 @@ agent-workflow-kit/
   * 清洗三份顾问技能越权残留与 `GAMEDEV.EditorTools` 漂移；
   * 全面重写 `AGENTS.md`、`README.md`、`docs/USAGE.md` 及模板内 `AGENTS.md` / `_templates/`（彻底清除 ABC 旧路径与旧名词 `Executor`）。
   * *阶段验收标准*：用重构后的 Kit 模拟完整跑通一次“Secretary 备菜 → Chat 拖拽 Planner 出草案 → Worker 施工 → Watchdog 验收 → Secretary 回写”全链路演练无阻断。
+
+---
+
+## 7. v3.1 需求校准（2026-11-26）
+
+本节正式吸收 `docs/工作流更新备忘_2026-11-25.md` 的实际运行反馈，并覆盖与本节冲突的旧描述：
+
+1. **文件清单降为边界**：PLAN 批准 Write Boundaries、Forbidden、Read Policy 与 Protected Changes；Worker 非敏感全仓只读，在 Preflight 自动生成 Discovered Inputs 与 Planned Writes。边界内额外改动由 Watchdog 逐项审阅，边界外或 Forbidden 立即失败。
+2. **NEED_FILES 改异常升级**：Agent Planner 默认直接只读仓库。Chat Planner 或仓库外、敏感、冻结快照材料才进入 `NEED_FILES/ROUND_NN/`；`--append` 只创建下一轮，不覆盖 FEED_DROP 基线，并记录 Git HEAD、SHA-256、Token 与 append-only 轮次历史。
+3. **机器证据优先**：命令、退出码、测试、Diff、Manifest、哈希和日志是默认主证据。每个 AC 使用 `WORKER_AUTOMATABLE / UNITY_GUI_REQUIRED / CEO_MANUAL_ACCEPTANCE` 分类并声明执行人；自动项不得以截图、视频或观察为主证据。
+4. **Computer-Use 最后手段**：Worker 默认不启动 Unity、游戏或 Inspector。GUI 默认由 CEO 执行；只有 PLAN 与 APPROVAL_RECORD 明确列明目标、动作和范围时，Worker 才可操作专用 UI，并在执行报告中记录必要性、范围和结果。
+5. **自动范围审计**：`validate_handover.py --for watchdog/archive` 从批准 Base Commit 自动审计 Git Diff。非 Git 任务仅给显式 WARN，不能声称范围已完成机器验证。
+6. **v3.1 全面切换**：新任务和模板必须声明 `Workflow Version: v3.1`；旧 v3.0 任务包不自动迁移，按迁移文档新建或重建。
